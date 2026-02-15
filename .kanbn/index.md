@@ -10,12 +10,12 @@ completedColumns:
 ## Backlog
 
 - [actor-display](tasks/actor-display.md)
-- [controller-logic](tasks/controller-logic.md)
 
 ## Todo
 
 ## In Progress
 
 - [text-input](tasks/text-input.md)
+- [controller-logic](tasks/controller-logic.md)
 
 ## Done
