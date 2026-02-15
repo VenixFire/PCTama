@@ -10,6 +10,7 @@ public class McpClientServiceTests
     {
         // Arrange
         var mockLogger = new Mock<ILogger<McpClientService>>();
+        var mockLoggerFactory = new Mock<ILoggerFactory>();
         var mockHttpClientFactory = new Mock<IHttpClientFactory>();
         
         var configuration = new ConfigurationBuilder()
@@ -29,9 +30,14 @@ public class McpClientServiceTests
             .Setup(f => f.CreateClient("textmcp"))
             .Returns(new HttpClient());
 
+        mockLoggerFactory
+            .Setup(f => f.CreateLogger(It.IsAny<string>()))
+            .Returns(new Mock<ILogger>().Object);
+
         // Act
         var service = new McpClientService(
             mockLogger.Object,
+            mockLoggerFactory.Object,
             configuration,
             mockHttpClientFactory.Object);
 
@@ -47,6 +53,7 @@ public class McpClientServiceTests
     {
         // Arrange
         var mockLogger = new Mock<ILogger<McpClientService>>();
+        var mockLoggerFactory = new Mock<ILoggerFactory>();
         var mockHttpClientFactory = new Mock<IHttpClientFactory>();
         
         var configuration = new ConfigurationBuilder()
@@ -57,8 +64,13 @@ public class McpClientServiceTests
             })
             .Build();
 
+        mockLoggerFactory
+            .Setup(f => f.CreateLogger(It.IsAny<string>()))
+            .Returns(new Mock<ILogger>().Object);
+
         var service = new McpClientService(
             mockLogger.Object,
+            mockLoggerFactory.Object,
             configuration,
             mockHttpClientFactory.Object);
 
