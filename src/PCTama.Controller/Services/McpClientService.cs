@@ -66,15 +66,15 @@ public class McpClientService : BackgroundService
             var llmClient = new HttpClient
             {
                 BaseAddress = new Uri(_mcpConfig.LocalLlmEndpoint),
-                Timeout = TimeSpan.FromSeconds(5)
+                Timeout = TimeSpan.FromSeconds(_mcpConfig.LlmTimeoutSeconds)
             };
             _mcpSdkClient = new McpSdkClient(
                 llmClient, 
                 _loggerFactory.CreateLogger<McpSdkClient>(), 
                 _mcpConfig.ModelName);
             
-            _logger.LogInformation("Initialized MCP SDK client: Endpoint={Endpoint}, Model={Model}",
-                _mcpConfig.LocalLlmEndpoint, _mcpConfig.ModelName);
+            _logger.LogInformation("Initialized MCP SDK client: Endpoint={Endpoint}, Model={Model}, Timeout={Timeout}s",
+                _mcpConfig.LocalLlmEndpoint, _mcpConfig.ModelName, _mcpConfig.LlmTimeoutSeconds);
             
             // Check if LLM is available
             await CheckLlmAvailabilityAsync(cancellationToken);

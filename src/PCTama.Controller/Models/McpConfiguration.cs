@@ -46,4 +46,5 @@ public class McpConfiguration
     public int ProcessingIntervalMs { get; set; } = 1000;
     public bool UseChatMode { get; set; } = true;
     public int MaxChatHistory { get; set; } = 10;
+    public int LlmTimeoutSeconds { get; set; } = 60;
 }

@@ -40,7 +40,31 @@ PCTama is built as a collection of ASP.NET microservices orchestrated through .N
 - Windows 10 Build 19041 or later (for ActorMCP/WinUI3)
 - Optional: OBS Studio with LocalVoice plugin for text input
 
-## 🔧 Building the Project
+## �️ Setup
+
+### Ollama (Local LLM) - macOS
+
+PCTama requires Ollama for local LLM processing. Install and configure it:
+
+```bash
+# Install Ollama via Homebrew
+brew install ollama
+
+# Start Ollama service
+brew services start ollama
+
+# Pull the llama2 model (or your preferred model)
+ollama pull llama2
+```
+
+Verify Ollama is running:
+```bash
+curl http://localhost:11434/api/tags
+```
+
+You can configure the model and endpoint in [src/PCTama.Controller/appsettings.json](src/PCTama.Controller/appsettings.json).
+
+## �🔧 Building the Project
 
 ### Using CMake
 
