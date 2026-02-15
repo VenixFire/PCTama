@@ -8,6 +8,8 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- Enable RID graph to support legacy win10-* RIDs from WindowsAppSDK -->
+    <UseRidGraph Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</UseRidGraph>
   </PropertyGroup>
 
   <ItemGroup>
