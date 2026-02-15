@@ -27,7 +27,14 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\PCTama.Controller\PCTama.Controller.csproj" />
     <ProjectReference Include="..\..\src\PCTama.TextMCP\PCTama.TextMCP.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
     <ProjectReference Include="..\..\src\PCTama.ActorMCP\PCTama.ActorMCP.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="!$([MSBuild]::IsOSPlatform('Windows'))">
+    <Compile Remove="ActorMCP/**/*.cs" />
   </ItemGroup>
 
 </Project>
