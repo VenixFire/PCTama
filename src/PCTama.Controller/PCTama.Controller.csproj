@@ -9,7 +9,7 @@
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.AppHost" Version="8.2.2" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.0" />
-    <!-- ModelContextProtocol.NET - Placeholder for MCP SDK integration -->
+    <!-- MCP SDK implemented directly in McpSdkClient.cs for Ollama integration -->
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
   </ItemGroup>
 
