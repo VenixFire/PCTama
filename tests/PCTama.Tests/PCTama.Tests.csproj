@@ -8,8 +8,8 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <!-- Disable automatic RID inference to avoid deprecated win10-* RIDs from WindowsAppSDK -->
-    <RuntimeIdentifiers Condition="$([MSBuild]::IsOSPlatform('Windows'))"></RuntimeIdentifiers>
+    <!-- Explicitly set RuntimeIdentifier to win-x64 on Windows to avoid deprecated win10-* RIDs -->
+    <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Windows'))">win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
   <ItemGroup>
