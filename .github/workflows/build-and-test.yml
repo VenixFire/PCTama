@@ -42,6 +42,9 @@ jobs:
     - name: Display CMake version
       run: cmake --version
 
+    - name: Install .NET Aspire workload
+      run: dotnet workload install aspire
+
     - name: Restore dependencies
       run: dotnet restore PCTama.sln
 
@@ -80,6 +83,9 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Install .NET Aspire workload
+      run: dotnet workload install aspire
 
     - name: Restore dependencies
       run: dotnet restore PCTama.sln
@@ -124,6 +130,9 @@ jobs:
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
+    - name: Install .NET Aspire workload
+      run: dotnet workload install aspire
+
     - name: Restore dependencies
       run: dotnet restore PCTama.sln
 
@@ -155,6 +164,9 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Install .NET Aspire workload
+      run: dotnet workload install aspire
 
     - name: Restore dependencies
       run: dotnet restore PCTama.sln
