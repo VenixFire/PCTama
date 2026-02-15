@@ -8,9 +8,49 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-# Set up .NET path for macOS
+DOTNET_CMD=""
+
+function resolve_dotnet() {
+    if [ -n "$DOTNET_CMD" ]; then
+        return 0
+    fi
+
+    if [ -n "$DOTNET_ROOT" ] && [ -x "$DOTNET_ROOT/dotnet" ]; then
+        DOTNET_CMD="$DOTNET_ROOT/dotnet"
+        return 0
+    fi
+
+    if command -v dotnet >/dev/null 2>&1; then
+        DOTNET_CMD="$(command -v dotnet)"
+        return 0
+    fi
+
+    local candidates=(
+        "/opt/homebrew/opt/dotnet@8/bin/dotnet"
+        "/opt/homebrew/opt/dotnet/bin/dotnet"
+        "/usr/local/share/dotnet/dotnet"
+        "/usr/local/bin/dotnet"
+        "/usr/share/dotnet/dotnet"
+        "$HOME/.dotnet/dotnet"
+    )
+
+    for candidate in "${candidates[@]}"; do
+        if [ -x "$candidate" ]; then
+            DOTNET_CMD="$candidate"
+            break
+        fi
+    done
+
+    if [ -z "$DOTNET_CMD" ]; then
+        echo "❌ dotnet not found. Please install .NET SDK 8+ or set DOTNET_ROOT." >&2
+        exit 1
+    fi
+}
+
+# Ensure PATH includes dotnet directory when needed
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    export PATH="/opt/homebrew/opt/dotnet@8/bin:$PATH"
+    resolve_dotnet
+    export PATH="$(dirname "$DOTNET_CMD"):$PATH"
 fi
 
 function show_help() {
@@ -33,26 +73,31 @@ function show_help() {
 
 function restore() {
     echo "Restoring packages..."
+    resolve_dotnet
     dotnet restore PCTama.sln
 }
 
 function build() {
     echo "Building solution (Debug)..."
+    resolve_dotnet
     dotnet build PCTama.sln --configuration Debug
 }
 
 function build_release() {
     echo "Building solution (Release)..."
+    resolve_dotnet
     dotnet build PCTama.sln --configuration Release
 }
 
 function run_tests() {
     echo "Running tests..."
+    resolve_dotnet
     dotnet test tests/PCTama.Tests/PCTama.Tests.csproj --verbosity normal
 }
 
 function clean() {
     echo "Cleaning build artifacts..."
+    resolve_dotnet
     dotnet clean PCTama.sln
     rm -rf bin obj build
     find . -type d -name "bin" -o -name "obj" | xargs rm -rf
@@ -75,12 +120,13 @@ function run_app() {
     echo "╚════════════════════════════════════════════════════════════╝"
     echo ""
     
+    resolve_dotnet
     cd src/PCTama.AppHost
     export ASPIRE_ALLOW_UNSECURED_TRANSPORT=true
     export ASPNETCORE_URLS="http://localhost:15000"
     export DOTNET_DASHBOARD_OTLP_ENDPOINT_URL="http://localhost:18889"
-    
-    /opt/homebrew/opt/dotnet@8/bin/dotnet run --no-build
+
+    "$DOTNET_CMD" run --no-build
 }
 
 function build_cmake() {
