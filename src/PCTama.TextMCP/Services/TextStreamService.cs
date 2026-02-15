@@ -1,6 +1,5 @@
 using PCTama.TextMCP.Models;
 using System.Collections.Concurrent;
-using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 
@@ -31,7 +30,7 @@ public class TextStreamService : BackgroundService
 
         if (_config.Source == "OBSLocalVoice")
         {
-            await StartOBSLocalVoiceStreamAsync(stoppingToken);
+            await StartFileMonitoringAsync(stoppingToken);
         }
 
         // Process additional sources
@@ -41,116 +40,117 @@ public class TextStreamService : BackgroundService
         }
     }
 
-    private async Task StartOBSLocalVoiceStreamAsync(CancellationToken cancellationToken)
+    private async Task StartFileMonitoringAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Connecting to OBS LocalVoice at {Endpoint}", _config.OBSLocalVoiceEndpoint);
-        _logger.LogInformation("⚠️  Ensure OBS LocalVocal plugin is installed and WebSocket is enabled in OBS settings");
-
+        // Resolve file path - if relative, make it relative to the app directory
+        var configuredPath = _config.LocalVocalFilePath;
+        var filePath = Path.IsPathRooted(configuredPath) 
+            ? configuredPath 
+            : Path.Combine(AppContext.BaseDirectory, configuredPath);
+        
+        _logger.LogInformation("📁 Monitoring file for OBS LocalVocal text: {FilePath}", filePath);
+        _logger.LogInformation("💡 Working directory: {WorkingDir}", Directory.GetCurrentDirectory());
+        _logger.LogInformation("💡 OBS LocalVocal should write transcriptions to this file");
+        
+        // Ensure file exists
+        if (!File.Exists(filePath))
+        {
+            _logger.LogInformation("📝 Creating new file: {FilePath}", filePath);
+            await File.WriteAllTextAsync(filePath, "", cancellationToken);
+        }
+        else
+        {
+            _logger.LogInformation("✅ File exists with {Size} bytes", new FileInfo(filePath).Length);
+        }
+        
+        long lastPosition = 0;
+        long lastFileSize = new FileInfo(filePath).Length;
+        
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                await ConnectAndListenToOBSLocalVocalAsync(cancellationToken);
-            }
-            catch (WebSocketException wsEx)
-            {
-                _logger.LogError(wsEx, "❌ WebSocket connection failed to OBS LocalVocal");
-                _logger.LogError("📋 Required OBS Setup:");
-                _logger.LogError("   1. Install LocalVocal plugin (https://github.com/occ-ai/obs-localvocal)");
-                _logger.LogError("   2. In OBS: Tools → LocalVocal Settings");
-                _logger.LogError("   3. Enable 'WebSocket Server' and set port to 4455");
-                _logger.LogError("   4. Enable 'Send Transcription to WebSocket'");
-                _logger.LogError("   5. Add LocalVocal filter to your microphone source");
-                _logger.LogError("⏱️  Retrying connection in 10 seconds...");
-                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+                var fileInfo = new FileInfo(filePath);
+                if (!fileInfo.Exists)
+                {
+                    _logger.LogWarning("⚠️  File disappeared: {FilePath}. Recreating...", filePath);
+                    await File.WriteAllTextAsync(filePath, "", cancellationToken);
+                    lastPosition = 0;
+                    await Task.Delay(TimeSpan.FromMilliseconds(_config.FilePollingIntervalMs), cancellationToken);
+                    continue;
+                }
+                
+                // Check if file has new content
+                if (fileInfo.Length > lastPosition)
+                {
+                    await ReadNewContentAsync(filePath, lastPosition, cancellationToken);
+                    lastPosition = fileInfo.Length;
+                }
+                else if (fileInfo.Length < lastFileSize)
+                {
+                    // File was truncated or reset
+                    _logger.LogDebug("🔄 File was reset, starting from beginning");
+                    lastPosition = 0;
+                }
+                
+                lastFileSize = fileInfo.Length;
+                await Task.Delay(TimeSpan.FromMilliseconds(_config.FilePollingIntervalMs), cancellationToken);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in OBS LocalVoice connection. Reconnecting in 10 seconds...");
-                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+                _logger.LogError(ex, "Error monitoring file: {FilePath}", filePath);
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
             }
         }
     }
 
-    private async Task ConnectAndListenToOBSLocalVocalAsync(CancellationToken cancellationToken)
+    private async Task ReadNewContentAsync(string filePath, long startPosition, CancellationToken cancellationToken)
     {
-        using var ws = new ClientWebSocket();
-        
         try
         {
-            var uri = new Uri(_config.OBSLocalVoiceEndpoint);
-            _logger.LogInformation("Attempting WebSocket connection to {Uri}", uri);
+            using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            fileStream.Seek(startPosition, SeekOrigin.Begin);
             
-            await ws.ConnectAsync(uri, cancellationToken);
-            _logger.LogInformation("✅ Connected to OBS LocalVocal WebSocket");
-
-            var buffer = new byte[4096];
-            var messageBuilder = new StringBuilder();
-
-            while (ws.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+            using var reader = new StreamReader(fileStream, Encoding.UTF8);
+            var newContent = await reader.ReadToEndAsync(cancellationToken);
+            
+            if (string.IsNullOrWhiteSpace(newContent))
+                return;
+            
+            _logger.LogDebug("📬 Read {Length} bytes from file", newContent.Length);
+            
+            // Process each line as a separate transcription
+            var lines = newContent.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+            
+            foreach (var line in lines)
             {
-                var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
-
-                if (result.MessageType == WebSocketMessageType.Close)
+                var trimmedLine = line.Trim();
+                if (string.IsNullOrWhiteSpace(trimmedLine))
+                    continue;
+                
+                // Try to parse as JSON first (if OBS outputs JSON)
+                if (trimmedLine.StartsWith("{") && trimmedLine.EndsWith("}"))
                 {
-                    _logger.LogWarning("WebSocket close message received");
-                    await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", cancellationToken);
-                    break;
+                    await ProcessJsonLineAsync(trimmedLine, cancellationToken);
                 }
-
-                if (result.MessageType == WebSocketMessageType.Text)
+                else
                 {
-                    var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    messageBuilder.Append(message);
-
-                    if (result.EndOfMessage)
-                    {
-                        var fullMessage = messageBuilder.ToString();
-                        messageBuilder.Clear();
-
-                        await ProcessOBSLocalVocalMessageAsync(fullMessage, cancellationToken);
-                    }
+                    // Plain text
+                    await ProcessPlainTextLineAsync(trimmedLine, cancellationToken);
                 }
             }
         }
-        catch (WebSocketException wsEx)
+        catch (Exception ex)
         {
-            // Provide detailed error message about OBS configuration
-            if (wsEx.WebSocketErrorCode == WebSocketError.ConnectionClosedPrematurely || 
-                wsEx.Message.Contains("connect", StringComparison.OrdinalIgnoreCase))
-            {
-                _logger.LogWarning("⚠️  Cannot connect to OBS LocalVocal WebSocket at {Endpoint}", _config.OBSLocalVoiceEndpoint);
-                _logger.LogWarning("💡 Check that OBS LocalVocal plugin WebSocket settings are enabled:");
-                _logger.LogWarning("   → OBS → Tools → LocalVocal Settings → Enable WebSocket Server");
-            }
-            else
-            {
-                _logger.LogWarning(wsEx, "WebSocket error occurred. Verify OBS LocalVocal configuration.");
-            }
-            throw;
-        }
-        catch (HttpRequestException httpEx)
-        {
-            _logger.LogWarning(httpEx, "❌ HTTP connection failed - OBS LocalVocal WebSocket server may not be running");
-            _logger.LogWarning("💡 Verify: OBS is running AND LocalVocal WebSocket is enabled in plugin settings");
-            throw;
-        }
-        finally
-        {
-            if (ws.State == WebSocketState.Open)
-            {
-                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Service stopping", CancellationToken.None);
-            }
+            _logger.LogError(ex, "Error reading file content");
         }
     }
 
-    private async Task ProcessOBSLocalVocalMessageAsync(string message, CancellationToken cancellationToken)
+    private async Task ProcessJsonLineAsync(string jsonLine, CancellationToken cancellationToken)
     {
         try
         {
-            // OBS LocalVocal sends JSON messages with transcription data
-            // Expected format: { "text": "...", "confidence": 0.95, "is_final": true }
-            var jsonDoc = JsonDocument.Parse(message);
+            var jsonDoc = JsonDocument.Parse(jsonLine);
             var root = jsonDoc.RootElement;
 
             if (root.TryGetProperty("text", out var textElement))
@@ -159,15 +159,9 @@ public class TextStreamService : BackgroundService
                 if (string.IsNullOrWhiteSpace(text))
                     return;
 
-                var isFinal = root.TryGetProperty("is_final", out var finalElement) && finalElement.GetBoolean();
-                
-                // Only process final transcriptions to avoid duplicates
-                if (!isFinal)
-                    return;
-
                 var confidence = root.TryGetProperty("confidence", out var confElement) 
                     ? confElement.GetDouble() 
-                    : 0.0;
+                    : 1.0;
 
                 var textData = new TextData
                 {
@@ -177,66 +171,43 @@ public class TextStreamService : BackgroundService
                     Metadata = new Dictionary<string, object>
                     {
                         ["confidence"] = confidence,
-                        ["is_final"] = isFinal
+                        ["format"] = "json"
                     }
                 };
 
-                // Add language if present
                 if (root.TryGetProperty("language", out var langElement))
                 {
                     textData.Metadata["language"] = langElement.GetString() ?? "unknown";
                 }
 
                 await AddTextToBufferAsync(textData);
-                _logger.LogInformation("📝 Received from OBS LocalVocal: {Text} (confidence: {Confidence:P0})", 
+                _logger.LogInformation("📝 Received from file (JSON): {Text} (confidence: {Confidence:P0})", 
                     text, confidence);
             }
         }
-        catch (JsonException jsonEx)
+        catch (JsonException)
         {
-            _logger.LogWarning(jsonEx, "Failed to parse OBS LocalVocal message: {Message}", message);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error processing OBS LocalVocal message");
+            // If JSON parsing fails, treat as plain text
+            await ProcessPlainTextLineAsync(jsonLine, cancellationToken);
         }
     }
 
-    private async Task StartOBSLocalVoiceStreamAsync_Simulation(CancellationToken cancellationToken)
+    private async Task ProcessPlainTextLineAsync(string text, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Running OBS LocalVoice in SIMULATION mode");
-
-        // TODO: Remove this simulation method once real WebSocket is confirmed working
-        // This is a placeholder implementation that simulates streaming
-        while (!cancellationToken.IsCancellationRequested)
+        var textData = new TextData
         {
-            try
+            Text = text,
+            Source = "OBSLocalVoice",
+            Timestamp = DateTime.UtcNow,
+            Metadata = new Dictionary<string, object>
             {
-                // Simulate receiving text data from OBS LocalVoice
-                // In production, this would be a WebSocket listener
-                await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
-                
-                // Placeholder: simulate periodic text input
-                var textData = new TextData
-                {
-                    Text = $"Simulated text from OBS LocalVoice at {DateTime.UtcNow:HH:mm:ss}",
-                    Source = "OBSLocalVoice",
-                    Timestamp = DateTime.UtcNow,
-                    Metadata = new Dictionary<string, object>
-                    {
-                        ["confidence"] = 0.95,
-                        ["language"] = "en-US"
-                    }
-                };
+                ["confidence"] = 1.0,
+                ["format"] = "plaintext"
+            }
+        };
 
-                await AddTextToBufferAsync(textData);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in OBS LocalVoice stream");
-                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
-            }
-        }
+        await AddTextToBufferAsync(textData);
+        _logger.LogInformation("📝 Received from file (text): {Text}", text);
     }
 
     private async Task ProcessAdditionalSourceAsync(AdditionalSource source, CancellationToken cancellationToken)

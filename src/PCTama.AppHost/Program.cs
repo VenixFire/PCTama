@@ -9,7 +9,7 @@ var actorMcp = builder.AddProject<Projects.PCTama_ActorMCP>("actormcp")
 
 // Add main controller service with references to MCPs
 var controller = builder.AddProject<Projects.PCTama_Controller>("controller")
-    .WithHttpEndpoint(port: 5000, name: "http")
+    .WithHttpEndpoint(port: 5003, name: "http")
     .WithReference(textMcp)
     .WithReference(actorMcp);
 
