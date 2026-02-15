@@ -152,6 +152,11 @@ dotnet --version  # Should show 8.0.x
 ```
 Install .NET 8.0 SDK if not present.
 
+Windows install command:
+```bash
+winget install Microsoft.DotNet.SDK.8
+```
+
 **Problem**: CMake not found
 
 **Solution**:

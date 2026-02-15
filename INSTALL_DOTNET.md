@@ -1,6 +1,19 @@
-# Installing .NET SDK on macOS
+# Installing .NET SDK
 
 ## You need .NET 8.0 SDK to build PCTama
+
+## Windows
+
+Open PowerShell and run:
+
+```bash
+winget install Microsoft.DotNet.SDK.8
+
+# Verify installation
+dotnet --version
+```
+
+If prompted, restart your terminal after installation.
 
 ### Method 1: Homebrew (Recommended)
 

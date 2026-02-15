@@ -40,6 +40,12 @@ PCTama is built as a collection of ASP.NET microservices orchestrated through .N
 - Windows 10 Build 19041 or later (for ActorMCP/WinUI3)
 - Optional: OBS Studio with LocalVoice plugin for text input
 
+Windows .NET SDK install:
+
+```bash
+winget install Microsoft.DotNet.SDK.8
+```
+
 ## �️ Setup
 
 ### Ollama (Local LLM) - macOS
