@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OutputType>Exe</OutputType>
+    <IsAspireHost>true</IsAspireHost>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting" Version="8.0.0" />
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PCTama.ServiceDefaults\PCTama.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\PCTama.Controller\PCTama.Controller.csproj" />
+    <ProjectReference Include="..\PCTama.TextMCP\PCTama.TextMCP.csproj" />
+    <ProjectReference Include="..\PCTama.ActorMCP\PCTama.ActorMCP.csproj" />
+  </ItemGroup>
+
+</Project>

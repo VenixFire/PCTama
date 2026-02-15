@@ -1,0 +1,179 @@
+name: PCTama Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  CMAKE_VERSION: '3.20.0'
+
+jobs:
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        configuration: [Debug, Release]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Setup CMake
+      uses: jwlawson/actions-setup-cmake@v1
+      with:
+        cmake-version: ${{ env.CMAKE_VERSION }}
+
+    - name: Display .NET info
+      run: dotnet --info
+
+    - name: Display CMake version
+      run: cmake --version
+
+    - name: Restore dependencies
+      run: dotnet restore PCTama.sln
+
+    - name: Build with dotnet
+      run: dotnet build PCTama.sln --configuration ${{ matrix.configuration }} --no-restore
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.configuration }}
+
+    - name: Build with CMake
+      run: cmake --build build --config ${{ matrix.configuration }}
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-${{ matrix.os }}-${{ matrix.configuration }}
+        path: |
+          build/bin/${{ matrix.configuration }}/
+          bin/${{ matrix.configuration }}/
+        retention-days: 7
+
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    needs: build
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        configuration: [Debug, Release]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore PCTama.sln
+
+    - name: Build
+      run: dotnet build PCTama.sln --configuration ${{ matrix.configuration }} --no-restore
+
+    - name: Run tests
+      run: dotnet test tests/PCTama.Tests/PCTama.Tests.csproj --configuration ${{ matrix.configuration }} --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ matrix.os }}-${{ matrix.configuration }}
+        path: |
+          **/test-results.trx
+          **/coverage.cobertura.xml
+        retention-days: 30
+
+    - name: Publish test results
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: Test Results (${{ matrix.os }}, ${{ matrix.configuration }})
+        path: '**/test-results.trx'
+        reporter: dotnet-trx
+        fail-on-error: true
+
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore PCTama.sln
+
+    - name: Build
+      run: dotnet build PCTama.sln --configuration Release --no-restore
+
+    - name: Run tests with coverage
+      run: dotnet test tests/PCTama.Tests/PCTama.Tests.csproj --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
+
+    - name: Code Coverage Report
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage/**/coverage.cobertura.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  package:
+    name: Package
+    runs-on: windows-latest
+    needs: [build, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore PCTama.sln
+
+    - name: Build
+      run: dotnet build PCTama.sln --configuration Release --no-restore
+
+    - name: Publish Controller
+      run: dotnet publish src/PCTama.Controller/PCTama.Controller.csproj --configuration Release --output ./publish/controller
+
+    - name: Publish TextMCP
+      run: dotnet publish src/PCTama.TextMCP/PCTama.TextMCP.csproj --configuration Release --output ./publish/textmcp
+
+    - name: Publish ActorMCP (Windows only)
+      run: dotnet publish src/PCTama.ActorMCP/PCTama.ActorMCP.csproj --configuration Release --output ./publish/actormcp
+
+    - name: Upload package artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: packages
+        path: ./publish/
+        retention-days: 90

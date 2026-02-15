@@ -1,0 +1,38 @@
+name: CMake Build
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  cmake-build:
+    name: CMake Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Setup CMake
+      uses: jwlawson/actions-setup-cmake@v1
+      with:
+        cmake-version: '3.20.0'
+
+    - name: Configure CMake
+      run: cmake -B build
+
+    - name: Build with CMake
+      run: cmake --build build
+
+    - name: Test with CMake
+      run: cmake --build build --target test_all
+      continue-on-error: true

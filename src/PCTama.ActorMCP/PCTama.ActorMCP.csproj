@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework Condition="$([MSBuild]::IsOSPlatform('Windows'))">net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetFramework Condition="!$([MSBuild]::IsOSPlatform('Windows'))">net8.0</TargetFramework>
+    <TargetPlatformMinVersion Condition="$([MSBuild]::IsOSPlatform('Windows'))">10.0.17763.0</TargetPlatformMinVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWinUI Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</UseWinUI>
+    <EnableMsixTooling Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</EnableMsixTooling>
+    <OutputType>Exe</OutputType>
+    <Platforms>x64;arm64</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="8.2.2" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.0" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.5.240227000" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.22621.756" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+    <!-- ModelContextProtocol.NET - Placeholder for MCP SDK integration -->
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PCTama.ServiceDefaults\PCTama.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>
