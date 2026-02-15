@@ -3,9 +3,10 @@ namespace PCTama.TextMCP.Models;
 public class TextStreamConfiguration
 {
     public string Source { get; set; } = string.Empty;
-    public string OBSLocalVoiceEndpoint { get; set; } = string.Empty;
+    public string LocalVocalFilePath { get; set; } = "FromLocalVocalText";
     public bool StreamingEnabled { get; set; } = true;
     public int BufferSize { get; set; } = 4096;
+    public int FilePollingIntervalMs { get; set; } = 100;
     public List<AdditionalSource> AdditionalSources { get; set; } = new();
 }
 
