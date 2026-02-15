@@ -1,15 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework Condition="$([MSBuild]::IsOSPlatform('Windows'))">net8.0-windows10.0.19041.0</TargetFramework>
-    <TargetFramework Condition="!$([MSBuild]::IsOSPlatform('Windows'))">net8.0</TargetFramework>
-    <TargetPlatformMinVersion Condition="$([MSBuild]::IsOSPlatform('Windows'))">10.0.17763.0</TargetPlatformMinVersion>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <!-- Use SDK's RID for current platform to avoid deprecated win10-* RIDs from WindowsAppSDK -->
-    <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,7 +26,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\PCTama.Controller\PCTama.Controller.csproj" />
     <ProjectReference Include="..\..\src\PCTama.TextMCP\PCTama.TextMCP.csproj" />
-    <ProjectReference Include="..\..\src\PCTama.ActorMCP\PCTama.ActorMCP.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="ActorMCP/**/*.cs" />
   </ItemGroup>
 
 </Project>
