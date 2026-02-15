@@ -32,6 +32,7 @@ jobs:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
     - name: Setup CMake
+      if: runner.os == 'Windows'
       uses: jwlawson/actions-setup-cmake@v1
       with:
         cmake-version: ${{ env.CMAKE_VERSION }}
@@ -40,6 +41,7 @@ jobs:
       run: dotnet --info
 
     - name: Display CMake version
+      if: runner.os == 'Windows'
       run: cmake --version
 
     - name: Install .NET Aspire workload
@@ -52,9 +54,11 @@ jobs:
       run: dotnet build PCTama.sln --configuration ${{ matrix.configuration }} --no-restore
 
     - name: Configure CMake
+      if: runner.os == 'Windows'
       run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.configuration }}
 
     - name: Build with CMake
+      if: runner.os == 'Windows'
       run: cmake --build build --config ${{ matrix.configuration }}
 
     - name: Upload build artifacts
