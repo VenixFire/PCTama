@@ -34,7 +34,9 @@
   </ItemGroup>
 
   <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
-    <ProjectReference Include="..\..\src\PCTama.ActorMCP\PCTama.ActorMCP.csproj" />
+    <ProjectReference Include="..\..\src\PCTama.ActorMCP\PCTama.ActorMCP.csproj">
+      <ExcludeAssets>runtime;native</ExcludeAssets>
+    </ProjectReference>
   </ItemGroup>
 
   <ItemGroup Condition="!$([MSBuild]::IsOSPlatform('Windows'))">
