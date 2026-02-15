@@ -9,7 +9,7 @@ on:
 
 env:
   DOTNET_VERSION: '8.0.x'
-  CMAKE_VERSION: '3.20.0'
+  CMAKE_VERSION: '3.22.0'
 
 jobs:
   build:
