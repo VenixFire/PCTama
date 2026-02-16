@@ -55,4 +55,42 @@ public class TextController : ControllerBase
     {
         return Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
     }
-}
+
+    // MCP Tool Discovery
+    [HttpGet("mcp/tools")]
+    public IActionResult GetMcpTools()
+    {
+        var tools = _textStreamService.GetAvailableTools();
+        return Ok(new McpToolsResponse { Tools = tools });
+    }
+
+    // MCP Resource Discovery
+    [HttpGet("mcp/resources")]
+    public IActionResult GetMcpResources()
+    {
+        var resources = _textStreamService.GetAvailableResources();
+        return Ok(new McpResourcesResponse { Resources = resources });
+    }
+
+    // MCP Resource Access
+    [HttpGet("mcp/resources/{resourceId}")]
+    public async Task<IActionResult> GetMcpResource(string resourceId)
+    {
+        switch (resourceId.ToLower())
+        {
+            case "state":
+                var state = _textStreamService.GetState();
+                return Ok(state);
+
+            case "buffer":
+                var buffer = await _textStreamService.GetAllTextAsync();
+                return Ok(buffer);
+
+            case "latest":
+                var latest = await _textStreamService.GetLatestTextAsync();
+                return Ok(latest);
+
+            default:
+                return NotFound(new { error = $"Resource '{resourceId}' not found" });
+        }
+    }}
