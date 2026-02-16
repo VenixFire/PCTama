@@ -9,7 +9,7 @@
         CanResize="True"
         WindowStartupLocation="CenterScreen">
 
-    <Grid RowDefinitions="Auto,*,Auto" Margin="20">
+    <Grid RowDefinitions="Auto,*,Auto,*" Margin="20">
         
         <!-- Header -->
         <TextBlock Grid.Row="0"
@@ -53,28 +53,36 @@
             </StackPanel>
         </Border>
 
+        <!-- Splitter -->
+        <GridSplitter Grid.Row="2" 
+                      Height="8"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"
+                      Background="#E0E0E0" />
+
         <!-- Action History -->
-        <StackPanel Grid.Row="2" Margin="0,15,0,0">
-            <TextBlock Text="Recent Actions:" FontSize="12" FontWeight="Bold" Foreground="#666666" Margin="0,0,0,8" />
-            <ListBox ItemsSource="{Binding ActionHistory}"
-                     Height="120"
-                     BorderBrush="#CCCCCC"
-                     BorderThickness="1"
-                     CornerRadius="4">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <Border Padding="10,5" Background="Transparent">
-                            <TextBlock>
-                                <Run Text="{Binding Timestamp, StringFormat='[{0:HH:mm:ss}]'}" Foreground="#CCCCCC" />
-                                <Run Text=" " />
-                                <Run Text="{Binding Action}" FontWeight="Bold" Foreground="#66BB6A" />
-                                <Run Text=": " />
-                                <Run Text="{Binding Details}" Foreground="#CCCCCC" />
-                            </TextBlock>
-                        </Border>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-        </StackPanel>
+        <ScrollViewer Grid.Row="3" Margin="0,0,0,0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Text="Recent Actions:" FontSize="12" FontWeight="Bold" Foreground="#666666" Margin="0,0,0,8" />
+                <ListBox ItemsSource="{Binding ActionHistory}"
+                         BorderBrush="#CCCCCC"
+                         BorderThickness="1"
+                         CornerRadius="4">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="10,5" Background="Transparent">
+                                <TextBlock>
+                                    <Run Text="{Binding Timestamp, StringFormat='[{0:HH:mm:ss}]'}" Foreground="#CCCCCC" />
+                                    <Run Text=" " />
+                                    <Run Text="{Binding Action}" FontWeight="Bold" Foreground="#66BB6A" />
+                                    <Run Text=": " />
+                                    <Run Text="{Binding Details}" Foreground="#CCCCCC" />
+                                </TextBlock>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+        </ScrollViewer>
     </Grid>
 </Window>
