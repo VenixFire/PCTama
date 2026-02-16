@@ -12,6 +12,8 @@ public class TextStreamService : BackgroundService
     private readonly TextStreamConfiguration _config;
     private readonly ConcurrentQueue<TextData> _textBuffer = new();
     private readonly SemaphoreSlim _bufferSemaphore = new(1, 1);
+    private int _lastProcessedCaptionIndex = 0;
+    private DateTime _lastProcessedTimestamp = DateTime.MinValue;
 
     public TextStreamService(
         ILogger<TextStreamService> logger,
@@ -27,8 +29,9 @@ public class TextStreamService : BackgroundService
     {
         _logger.LogInformation("Text MCP Service starting...");
         _logger.LogInformation("Configured source: {Source}", _config.Source);
+        _logger.LogInformation("File format: {Format}", _config.FileFormat);
 
-        if (_config.Source == "OBSLocalVoice")
+        if (_config.StreamingEnabled)
         {
             await StartFileMonitoringAsync(stoppingToken);
         }
@@ -43,14 +46,14 @@ public class TextStreamService : BackgroundService
     private async Task StartFileMonitoringAsync(CancellationToken cancellationToken)
     {
         // Resolve file path - if relative, make it relative to the app directory
-        var configuredPath = _config.LocalVocalFilePath;
+        var configuredPath = _config.TranscriptionFilePath;
         var filePath = Path.IsPathRooted(configuredPath) 
             ? configuredPath 
             : Path.Combine(AppContext.BaseDirectory, configuredPath);
         
-        _logger.LogInformation("📁 Monitoring file for OBS LocalVocal text: {FilePath}", filePath);
+        _logger.LogInformation("📁 Monitoring transcription file: {FilePath}", filePath);
         _logger.LogInformation("💡 Working directory: {WorkingDir}", Directory.GetCurrentDirectory());
-        _logger.LogInformation("💡 OBS LocalVocal should write transcriptions to this file");
+        _logger.LogInformation("💡 File format: {Format}", _config.FileFormat);
         
         // Ensure file exists
         if (!File.Exists(filePath))
@@ -61,6 +64,12 @@ public class TextStreamService : BackgroundService
         else
         {
             _logger.LogInformation("✅ File exists with {Size} bytes", new FileInfo(filePath).Length);
+            
+            // On startup, initialize by reading existing captions and skipping them
+            if (_config.FileFormat.Equals("srt", StringComparison.OrdinalIgnoreCase))
+            {
+                await InitializeSrtTrackingAsync(filePath, cancellationToken);
+            }
         }
         
         long lastPosition = 0;
@@ -104,45 +113,144 @@ public class TextStreamService : BackgroundService
         }
     }
 
+    private async Task InitializeSrtTrackingAsync(string filePath, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var content = await File.ReadAllTextAsync(filePath, cancellationToken);
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                _logger.LogInformation("📋 No existing captions found in file");
+                return;
+            }
+            
+            var captions = SrtParser.ParseSrtContent(content);
+            if (captions.Count > 0)
+            {
+                // Find the highest caption index
+                var maxIndex = captions.Max(c => c.Index);
+                _lastProcessedCaptionIndex = maxIndex;
+                _logger.LogInformation("🔄 Initialized caption tracking. Skipping {Count} existing captions (up to index {MaxIndex})",
+                    captions.Count, maxIndex);
+            }
+            else
+            {
+                _logger.LogInformation("📋 No valid captions found in file");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error initializing SRT tracking. Will process all captions.");
+        }
+    }
+
     private async Task ReadNewContentAsync(string filePath, long startPosition, CancellationToken cancellationToken)
     {
         try
         {
-            using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            fileStream.Seek(startPosition, SeekOrigin.Begin);
-            
-            using var reader = new StreamReader(fileStream, Encoding.UTF8);
-            var newContent = await reader.ReadToEndAsync(cancellationToken);
-            
-            if (string.IsNullOrWhiteSpace(newContent))
-                return;
-            
-            _logger.LogDebug("📬 Read {Length} bytes from file", newContent.Length);
-            
-            // Process each line as a separate transcription
-            var lines = newContent.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-            
-            foreach (var line in lines)
+            // For SRT format, we need to read the entire file to parse captions properly
+            string content;
+            if (_config.FileFormat.Equals("srt", StringComparison.OrdinalIgnoreCase))
             {
-                var trimmedLine = line.Trim();
-                if (string.IsNullOrWhiteSpace(trimmedLine))
-                    continue;
+                content = await File.ReadAllTextAsync(filePath, cancellationToken);
+                if (string.IsNullOrWhiteSpace(content))
+                    return;
                 
-                // Try to parse as JSON first (if OBS outputs JSON)
-                if (trimmedLine.StartsWith("{") && trimmedLine.EndsWith("}"))
+                await ProcessSrtContentAsync(content, cancellationToken);
+            }
+            else
+            {
+                // For other formats, read incrementally from last position
+                using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                fileStream.Seek(startPosition, SeekOrigin.Begin);
+                
+                using var reader = new StreamReader(fileStream, Encoding.UTF8);
+                content = await reader.ReadToEndAsync(cancellationToken);
+                
+                if (string.IsNullOrWhiteSpace(content))
+                    return;
+                
+                _logger.LogDebug("📬 Read {Length} bytes from file", content.Length);
+                
+                // Process each line as a separate transcription
+                var lines = content.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                
+                foreach (var line in lines)
                 {
-                    await ProcessJsonLineAsync(trimmedLine, cancellationToken);
-                }
-                else
-                {
-                    // Plain text
-                    await ProcessPlainTextLineAsync(trimmedLine, cancellationToken);
+                    var trimmedLine = line.Trim();
+                    if (string.IsNullOrWhiteSpace(trimmedLine))
+                        continue;
+                    
+                    // Try to parse as JSON first (if source outputs JSON)
+                    if (trimmedLine.StartsWith("{") && trimmedLine.EndsWith("}"))
+                    {
+                        await ProcessJsonLineAsync(trimmedLine, cancellationToken);
+                    }
+                    else
+                    {
+                        // Plain text
+                        await ProcessPlainTextLineAsync(trimmedLine, cancellationToken);
+                    }
                 }
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error reading file content");
+        }
+    }
+
+    private async Task ProcessSrtContentAsync(string content, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var captions = SrtParser.ParseSrtContent(content);
+            
+            if (captions.Count == 0)
+                return;
+            
+            // Process only new captions (with index greater than last processed)
+            // This automatically filters out stale data from startup or file resets
+            var newCaptions = captions
+                .Where(c => c.Index > _lastProcessedCaptionIndex)
+                .OrderBy(c => c.Index)
+                .ToList();
+            
+            if (newCaptions.Count == 0)
+                return;
+            
+            _logger.LogDebug("📬 Processing {Count} new SRT captions (starting from index {Index})", 
+                newCaptions.Count, newCaptions.First().Index);
+            
+            foreach (var caption in newCaptions)
+            {
+                var textData = new TextData
+                {
+                    Text = caption.Text,
+                    Source = _config.Source,
+                    Timestamp = DateTime.UtcNow,
+                    Metadata = new Dictionary<string, object>
+                    {
+                        ["format"] = "srt",
+                        ["captionIndex"] = caption.Index,
+                        ["startTime"] = caption.StartTime.ToString(@"hh\:mm\:ss\.fff"),
+                        ["endTime"] = caption.EndTime.ToString(@"hh\:mm\:ss\.fff")
+                    }
+                };
+                
+                await AddTextToBufferAsync(textData);
+                _logger.LogInformation("📝 Received caption #{Index}: {Text}", caption.Index, caption.Text);
+                
+                // Update last processed index
+                if (caption.Index > _lastProcessedCaptionIndex)
+                {
+                    _lastProcessedCaptionIndex = caption.Index;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing SRT content");
         }
     }
 
@@ -166,7 +274,7 @@ public class TextStreamService : BackgroundService
                 var textData = new TextData
                 {
                     Text = text,
-                    Source = "OBSLocalVoice",
+                    Source = _config.Source,
                     Timestamp = DateTime.UtcNow,
                     Metadata = new Dictionary<string, object>
                     {
@@ -197,7 +305,7 @@ public class TextStreamService : BackgroundService
         var textData = new TextData
         {
             Text = text,
-            Source = "OBSLocalVoice",
+            Source = _config.Source,
             Timestamp = DateTime.UtcNow,
             Metadata = new Dictionary<string, object>
             {
