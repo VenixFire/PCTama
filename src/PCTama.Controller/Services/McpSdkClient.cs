@@ -28,6 +28,7 @@ public class McpSdkClient
         string? systemPrompt = null, 
         CancellationToken cancellationToken = default)
     {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             var request = new OllamaGenerateRequest
@@ -43,13 +44,15 @@ public class McpSdkClient
                 Encoding.UTF8,
                 "application/json");
 
-            _logger.LogDebug("Sending request to LLM: Model={Model}, PromptLength={Length}", 
-                _modelName, prompt.Length);
+            _logger.LogDebug("[LLM] Sending generate request | Model={Model} | PromptLength={PromptLength} | SystemPrompt={HasSystemPrompt}", 
+                _modelName, prompt.Length, !string.IsNullOrEmpty(systemPrompt));
+            _logger.LogTrace("[LLM] Prompt preview: {PromptPreview}...", prompt.Substring(0, Math.Min(100, prompt.Length)));
 
             var response = await _httpClient.PostAsync("/api/generate", content, cancellationToken);
             
             if (!response.IsSuccessStatusCode)
             {
+                stopwatch.Stop();
                 var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
                 var errorMsg = response.StatusCode switch
                 {
@@ -59,6 +62,8 @@ public class McpSdkClient
                         "503 Service Unavailable - Ollama server is not responding. Ensure 'ollama serve' is running.",
                     _ => $"HTTP {(int)response.StatusCode} - {errorContent}"
                 };
+                _logger.LogError("[LLM] Generate request failed | StatusCode={StatusCode} | Duration={DurationMs}ms | Error={Error}", 
+                    (int)response.StatusCode, stopwatch.ElapsedMilliseconds, errorMsg);
                 throw new HttpRequestException(errorMsg);
             }
 
@@ -68,11 +73,22 @@ public class McpSdkClient
 
             if (ollamaResponse == null)
             {
+                stopwatch.Stop();
                 throw new InvalidOperationException("Failed to deserialize LLM response");
             }
 
-            _logger.LogInformation("LLM response received: TokenCount={TokenCount}", 
-                ollamaResponse.EvalCount);
+            stopwatch.Stop();
+            var responseLength = ollamaResponse.Response.Length;
+            var tokensPerSecond = ollamaResponse.EvalCount > 0 
+                ? (ollamaResponse.EvalCount * 1000.0 / stopwatch.ElapsedMilliseconds) 
+                : 0;
+            var loadTimeSeconds = ollamaResponse.LoadDuration / 1_000_000_000.0;
+            var responseTimeSeconds = ollamaResponse.TotalDuration / 1_000_000_000.0;
+
+            _logger.LogInformation("[LLM] Generate response received | Model={Model} | Duration={TotalSeconds:F2}s | ResponseTokens={EvalCount} | PromptTokens={PromptCount} | TokensPerSec={TokensPerSec:F1} | ResponseLength={ResponseLength} | LoadTime={LoadSeconds:F2}s", 
+                ollamaResponse.Model, responseTimeSeconds, ollamaResponse.EvalCount, ollamaResponse.PromptEvalCount, tokensPerSecond, responseLength, loadTimeSeconds);
+            _logger.LogTrace("[LLM] Response content preview: {ResponsePreview}...", 
+                ollamaResponse.Response.Substring(0, Math.Min(150, ollamaResponse.Response.Length)));
 
             return new LlmResponse
             {
@@ -87,7 +103,9 @@ public class McpSdkClient
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating LLM response");
+            stopwatch.Stop();
+            _logger.LogError(ex, "[LLM] Generate request error | Duration={DurationMs}ms | Exception={ExceptionType}", 
+                stopwatch.ElapsedMilliseconds, ex.GetType().Name);
             return new LlmResponse
             {
                 Text = string.Empty,
@@ -105,6 +123,7 @@ public class McpSdkClient
         List<ChatMessage> messages,
         CancellationToken cancellationToken = default)
     {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             var request = new OllamaChatRequest
@@ -123,13 +142,22 @@ public class McpSdkClient
                 Encoding.UTF8,
                 "application/json");
 
-            _logger.LogDebug("Sending chat request to LLM: Model={Model}, MessageCount={Count}", 
-                _modelName, messages.Count);
+            // Calculate message statistics
+            var totalPromptChars = messages.Sum(m => m.Content.Length);
+            var userMessages = messages.Count(m => m.Role == "user");
+            var assistantMessages = messages.Count(m => m.Role == "assistant");
+            var systemMessages = messages.Count(m => m.Role == "system");
+
+            _logger.LogDebug("[LLM] Sending chat request | Model={Model} | Messages={MessageCount} (System={System}, User={User}, Assistant={Assistant}) | TotalChars={CharCount}", 
+                _modelName, messages.Count, systemMessages, userMessages, assistantMessages, totalPromptChars);
+            _logger.LogTrace("[LLM] Last user message: {LastUserMessage}...", 
+                messages.LastOrDefault(m => m.Role == "user")?.Content.Substring(0, Math.Min(100, messages.LastOrDefault(m => m.Role == "user")?.Content.Length ?? 0)) ?? "N/A");
 
             var response = await _httpClient.PostAsync("/api/chat", content, cancellationToken);
             
             if (!response.IsSuccessStatusCode)
             {
+                stopwatch.Stop();
                 var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
                 var errorMsg = response.StatusCode switch
                 {
@@ -139,6 +167,8 @@ public class McpSdkClient
                         "503 Service Unavailable - Ollama server is not responding. Ensure 'ollama serve' is running.",
                     _ => $"HTTP {(int)response.StatusCode} - {errorContent}"
                 };
+                _logger.LogError("[LLM] Chat request failed | StatusCode={StatusCode} | Duration={DurationMs}ms | MessageCount={MessageCount} | Error={Error}", 
+                    (int)response.StatusCode, stopwatch.ElapsedMilliseconds, messages.Count, errorMsg);
                 throw new HttpRequestException(errorMsg);
             }
 
@@ -148,11 +178,23 @@ public class McpSdkClient
 
             if (ollamaResponse == null || ollamaResponse.Message == null)
             {
+                stopwatch.Stop();
                 throw new InvalidOperationException("Failed to deserialize LLM chat response");
             }
 
-            _logger.LogInformation("LLM chat response received: TokenCount={TokenCount}", 
-                ollamaResponse.EvalCount);
+            stopwatch.Stop();
+            var responseLength = ollamaResponse.Message.Content.Length;
+            var tokensPerSecond = ollamaResponse.EvalCount > 0 
+                ? (ollamaResponse.EvalCount * 1000.0 / stopwatch.ElapsedMilliseconds) 
+                : 0;
+            var responseTimeSeconds = ollamaResponse.TotalDuration / 1_000_000_000.0;
+            var loadTimeSeconds = ollamaResponse.LoadDuration / 1_000_000_000.0;
+            var isTruncated = ollamaResponse.Message.Content.Length > 2000;
+
+            _logger.LogInformation("[LLM] Chat response received | Model={Model} | Duration={TotalSeconds:F2}s | ResponseTokens={EvalCount} | PromptTokens={PromptCount} | TokensPerSec={TokensPerSec:F1} | ResponseLength={ResponseLength} | LoadTime={LoadSeconds:F2}s | Truncated={Truncated}", 
+                ollamaResponse.Model, responseTimeSeconds, ollamaResponse.EvalCount, ollamaResponse.PromptEvalCount, tokensPerSecond, responseLength, loadTimeSeconds, isTruncated);
+            _logger.LogTrace("[LLM] Response content preview: {ResponsePreview}...", 
+                ollamaResponse.Message.Content.Substring(0, Math.Min(150, ollamaResponse.Message.Content.Length)));
 
             return new LlmResponse
             {
@@ -167,7 +209,9 @@ public class McpSdkClient
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating LLM chat response");
+            stopwatch.Stop();
+            _logger.LogError(ex, "[LLM] Chat request error | Duration={DurationMs}ms | MessageCount={MessageCount} | Exception={ExceptionType}", 
+                stopwatch.ElapsedMilliseconds, messages.Count, ex.GetType().Name);
             return new LlmResponse
             {
                 Text = string.Empty,
