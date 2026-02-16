@@ -36,10 +36,13 @@ public class McpClientService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("MCP Client Service starting...");
+        _logger.LogInformation("[MCP] Client Service starting... | Timestamp={Timestamp}", DateTime.UtcNow);
 
         // Initialize MCP clients
         await InitializeMcpClientsAsync(stoppingToken);
+
+        _logger.LogInformation("[MCP] Service initialization complete | ProcessingInterval={IntervalMs}ms | Timestamp={Timestamp}", 
+            _mcpConfig.ProcessingIntervalMs, DateTime.UtcNow);
 
         // Main processing loop
         while (!stoppingToken.IsCancellationRequested)
@@ -53,9 +56,11 @@ public class McpClientService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in MCP processing cycle");
+                _logger.LogError(ex, "[MCP] Error in processing cycle | Exception={ExceptionType}", ex.GetType().Name);
             }
         }
+
+        _logger.LogInformation("[MCP] Client Service stopping... | Timestamp={Timestamp}", DateTime.UtcNow);
     }
 
     private async Task InitializeMcpClientsAsync(CancellationToken cancellationToken)
@@ -73,15 +78,15 @@ public class McpClientService : BackgroundService
                 _loggerFactory.CreateLogger<McpSdkClient>(), 
                 _mcpConfig.ModelName);
             
-            _logger.LogInformation("Initialized MCP SDK client: Endpoint={Endpoint}, Model={Model}, Timeout={Timeout}s",
-                _mcpConfig.LocalLlmEndpoint, _mcpConfig.ModelName, _mcpConfig.LlmTimeoutSeconds);
+            _logger.LogInformation("[LLM] MCP SDK client initialized | Endpoint={Endpoint} | Model={Model} | Timeout={Timeout}s | ChatMode={ChatMode} | MaxHistory={MaxHistory}",
+                _mcpConfig.LocalLlmEndpoint, _mcpConfig.ModelName, _mcpConfig.LlmTimeoutSeconds, _mcpConfig.UseChatMode, _mcpConfig.MaxChatHistory);
             
             // Check if LLM is available
             await CheckLlmAvailabilityAsync(cancellationToken);
         }
         else
         {
-            _logger.LogWarning("No LLM endpoint configured. MCP SDK client not initialized.");
+            _logger.LogWarning("[LLM] No LLM endpoint configured. MCP SDK client not initialized.");
         }
 
         foreach (var server in _mcpConfig.McpServers.Where(s => s.Enabled))
@@ -96,12 +101,13 @@ public class McpClientService : BackgroundService
                 };
 
                 _mcpClients[server.Name] = client;
-                _logger.LogInformation("Initialized MCP client: {Name} at {Endpoint}", 
+                _logger.LogInformation("[MCP] Client initialized | Server={Name} | Endpoint={Endpoint}", 
                     server.Name, server.Endpoint);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to initialize MCP client: {Name}", server.Name);
+                _logger.LogError(ex, "[MCP] Failed to initialize client | Server={Name} | Endpoint={Endpoint} | Exception={ExceptionType}", 
+                    server.Name, server.Endpoint, ex.GetType().Name);
             }
         }
 
@@ -112,12 +118,13 @@ public class McpClientService : BackgroundService
             {
                 var client = new HttpClient { BaseAddress = new Uri(server.Endpoint) };
                 _mcpClients[server.Name] = client;
-                _logger.LogInformation("Initialized additional MCP client: {Name} at {Endpoint}", 
+                _logger.LogInformation("[MCP] Additional input client initialized | Server={Name} | Endpoint={Endpoint}", 
                     server.Name, server.Endpoint);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to initialize additional MCP client: {Name}", server.Name);
+                _logger.LogError(ex, "[MCP] Failed to initialize additional client | Server={Name} | Endpoint={Endpoint}", 
+                    server.Name, server.Endpoint);
             }
         }
     }
@@ -131,7 +138,8 @@ public class McpClientService : BackgroundService
             return;
         }
 
-        _logger.LogInformation("Received text input: {Input}", textInput);
+        _logger.LogInformation("[Input] Received text | Content={InputPreview}... | Length={InputLength}c", 
+            textInput.Substring(0, Math.Min(80, textInput.Length)), textInput.Length);
 
         // Process with local LLM (placeholder - integrate with actual MCP SDK)
         var llmResponse = await ProcessWithLlmAsync(textInput, cancellationToken);
@@ -152,12 +160,47 @@ public class McpClientService : BackgroundService
             var response = await client.GetAsync("/api/text/stream", cancellationToken);
             if (response.IsSuccessStatusCode)
             {
-                return await response.Content.ReadAsStringAsync(cancellationToken);
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                
+                // Try to parse as JSON object first (in case it's {"text":"", "message":"..."})
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(content);
+                    var root = doc.RootElement;
+                    
+                    // Check if it's a JSON object with "text" property
+                    if (root.TryGetProperty("text", out var textProp))
+                    {
+                        var text = textProp.GetString();
+                        
+                        // Skip if text is empty or null
+                        if (string.IsNullOrWhiteSpace(text))
+                        {
+                            _logger.LogDebug("[TextMCP] Filtered empty text response | Message={Message}", 
+                                root.TryGetProperty("message", out var msgProp) ? msgProp.GetString() : "N/A");
+                            return string.Empty;
+                        }
+                        
+                        return text;
+                    }
+                }
+                catch (System.Text.Json.JsonException)
+                {
+                    // Not JSON, treat as raw text
+                }
+                
+                // Return raw content if not JSON or if no empty filter applied
+                if (string.IsNullOrWhiteSpace(content))
+                {
+                    return string.Empty;
+                }
+                
+                return content;
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting text input from MCP");
+            _logger.LogError(ex, "[TextMCP] Error getting text input | Exception={ExceptionType}", ex.GetType().Name);
         }
 
         return string.Empty;
@@ -167,7 +210,7 @@ public class McpClientService : BackgroundService
     {
         if (_mcpSdkClient == null)
         {
-            _logger.LogWarning("MCP SDK client not initialized. Cannot process input.");
+            _logger.LogWarning("[LLM] MCP SDK client not initialized. Cannot process input.");
             return string.Empty;
         }
 
@@ -179,7 +222,7 @@ public class McpClientService : BackgroundService
 
         if (!_llmAvailable)
         {
-            _logger.LogDebug("LLM not available. Skipping processing.");
+            _logger.LogDebug("[LLM] LLM not available. Skipping processing.");
             return string.Empty;
         }
 
@@ -206,11 +249,15 @@ public class McpClientService : BackgroundService
                 }
                 messages.AddRange(_chatHistory);
 
+                _logger.LogTrace("[LLM] Chat mode | SystemPrompt={HasSystemPrompt} | HistorySize={HistorySize} | TotalMessages={MessageCount}", 
+                    !string.IsNullOrEmpty(_mcpConfig.PromptConfig.SystemPrompt), _chatHistory.Count, messages.Count);
+
                 response = await _mcpSdkClient.ChatAsync(messages, cancellationToken);
 
                 if (response.Success)
                 {
                     _chatHistory.Add(ChatMessage.Assistant(response.Text));
+                    _logger.LogDebug("[LLM] Response added to chat history | NewHistorySize={HistorySize}", _chatHistory.Count);
                 }
             }
             else
@@ -220,6 +267,9 @@ public class McpClientService : BackgroundService
                     ? input
                     : _mcpConfig.PromptConfig.UserPromptTemplate.Replace("{input}", input);
 
+                _logger.LogTrace("[LLM] Generate mode | TemplateUsed={TemplateUsed} | FinalPromptLength={PromptLength}c", 
+                    !string.IsNullOrEmpty(_mcpConfig.PromptConfig.UserPromptTemplate), prompt.Length);
+
                 response = await _mcpSdkClient.GenerateAsync(
                     prompt,
                     _mcpConfig.PromptConfig.SystemPrompt,
@@ -228,21 +278,31 @@ public class McpClientService : BackgroundService
 
             if (!response.Success)
             {
-                _logger.LogError("LLM failed to process input: {Error}", response.Error);
+                _logger.LogError("[LLM] Processing failed | Error={Error} | InputLength={InputLength}c | Mode={Mode}", 
+                    response.Error, input.Length, _mcpConfig.UseChatMode ? "chat" : "generate");
                 
                 // Mark LLM as unavailable if connection error
                 if (response.Error?.Contains("Connection refused") == true || 
                     response.Error?.Contains("No connection") == true)
                 {
                     _llmAvailable = false;
-                    _logger.LogWarning("LLM appears to be unavailable. Will retry in {Seconds} seconds.", _llmCheckInterval.TotalSeconds);
+                    _logger.LogWarning("[LLM] Connection error detected. Marking LLM unavailable. Will retry in {Seconds}s", _llmCheckInterval.TotalSeconds);
                 }
                 
                 return string.Empty;
             }
 
-            _logger.LogInformation("LLM processed input successfully: ResponseLength={Length}, Tokens={Tokens}",
-                response.Text.Length, response.EvalCount);
+            var responseLength = response.Text.Length;
+            var totalTokens = response.PromptEvalCount + response.EvalCount;
+            var tokensPerSecond = response.EvalCount > 0 
+                ? (response.EvalCount * 1_000_000_000.0 / (response.TotalDuration > 0 ? response.TotalDuration : 1)) 
+                : 0;
+            var totalTimeSeconds = response.TotalDuration / 1_000_000_000.0;
+
+            _logger.LogInformation("[LLM] Processing complete | ResponseLength={Length}c | ResponseTokens={EvalCount} | PromptTokens={PromptCount} | TotalTokens={TotalTokens} | Duration={DurationSeconds:F2}s | Mode={Mode}",
+                responseLength, response.EvalCount, response.PromptEvalCount, totalTokens, totalTimeSeconds, _mcpConfig.UseChatMode ? "chat" : "generate");
+            _logger.LogDebug("[LLM] Response preview | Text={ResponsePreview}...", 
+                response.Text.Substring(0, Math.Min(120, response.Text.Length)));
 
             // Apply behavior rules if configured
             var processedResponse = ApplyBehaviorRules(input, response.Text);
@@ -252,12 +312,14 @@ public class McpClientService : BackgroundService
         catch (HttpRequestException ex)
         {
             _llmAvailable = false;
-            _logger.LogWarning(ex, "LLM connection error. Will retry in {Seconds} seconds. Is Ollama running?", _llmCheckInterval.TotalSeconds);
+            _logger.LogWarning(ex, "[LLM] HTTP connection error | Endpoint={Endpoint} | IsOllamaRunning={OllamaHint} | WillRetry={Seconds}s", 
+                _mcpConfig.LocalLlmEndpoint, "Run 'ollama serve'?", _llmCheckInterval.TotalSeconds);
             return string.Empty;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing with LLM");
+            _logger.LogError(ex, "[LLM] Processing error | Mode={Mode} | InputLength={InputLength}c | Exception={ExceptionType}", 
+                _mcpConfig.UseChatMode ? "chat" : "generate", input.Length, ex.GetType().Name);
             return string.Empty;
         }
     }
@@ -279,17 +341,20 @@ public class McpClientService : BackgroundService
             
             if (_llmAvailable)
             {
-                _logger.LogInformation("LLM is available and ready at {Endpoint}", _mcpConfig.LocalLlmEndpoint);
+                _logger.LogInformation("[LLM] Health check OK | Endpoint={Endpoint} | Model={Model} | Status=available", 
+                    _mcpConfig.LocalLlmEndpoint, _mcpConfig.ModelName);
             }
             else
             {
-                _logger.LogWarning("LLM health check failed: {Error}", errorMessage);
+                _logger.LogWarning("[LLM] Health check failed | Error={Error} | Endpoint={Endpoint}", 
+                    errorMessage, _mcpConfig.LocalLlmEndpoint);
             }
         }
         catch (Exception ex)
         {
             _llmAvailable = false;
-            _logger.LogWarning("LLM health check error: {Message}", ex.Message);
+            _logger.LogWarning(ex, "[LLM] Health check exception | Endpoint={Endpoint} | Message={ExceptionMessage}", 
+                _mcpConfig.LocalLlmEndpoint, ex.Message);
         }
     }
 
@@ -301,19 +366,23 @@ public class McpClientService : BackgroundService
             {
                 if (Regex.IsMatch(input, rule.TriggerPattern, RegexOptions.IgnoreCase))
                 {
-                    _logger.LogInformation("Behavior rule triggered: {RuleName}", rule.Name);
+                    _logger.LogInformation("[Behavior] Rule triggered | RuleName={RuleName} | Pattern={Pattern} | Input={InputPreview}...", 
+                        rule.Name, rule.TriggerPattern, input.Substring(0, Math.Min(60, input.Length)));
                     
                     // Apply rule transformations or overrides
                     if (rule.ActionParameters.TryGetValue("ResponseOverride", out var overrideObj) 
                         && overrideObj is string overrideStr)
                     {
+                        _logger.LogDebug("[Behavior] Applying response override | OriginalLength={OriginalLength}c | OverrideLength={OverrideLength}c", 
+                            llmResponse.Length, overrideStr.Length);
                         return overrideStr;
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error applying behavior rule: {RuleName}", rule.Name);
+                _logger.LogWarning(ex, "[Behavior] Error applying rule | RuleName={RuleName} | Pattern={Pattern} | Exception={ExceptionType}", 
+                    rule.Name, rule.TriggerPattern, ex.GetType().Name);
             }
         }
 
@@ -324,12 +393,13 @@ public class McpClientService : BackgroundService
     {
         if (!_mcpClients.TryGetValue("actor", out var client))
         {
-            _logger.LogWarning("Actor MCP client not found");
+            _logger.LogWarning("[Actor] MCP client not found | AvailableClients={ClientCount}", _mcpClients.Count);
             return;
         }
 
         if (string.IsNullOrWhiteSpace(llmResponse))
         {
+            _logger.LogDebug("[Actor] Skipping empty LLM response");
             return;
         }
 
@@ -375,18 +445,18 @@ public class McpClientService : BackgroundService
             
             if (response.IsSuccessStatusCode)
             {
-                _logger.LogInformation("Action sent to actor MCP: {Action}, Endpoint={Endpoint}", 
-                    action.ActionType, endpoint);
+                _logger.LogInformation("[Actor] Action sent | Action={Action} | Endpoint={Endpoint} | ResponseLength={ResponseLength}c", 
+                    action.ActionType, endpoint, llmResponse.Length);
             }
             else
             {
-                _logger.LogWarning("Failed to send action to actor MCP: StatusCode={StatusCode}", 
-                    response.StatusCode);
+                _logger.LogWarning("[Actor] Failed to send action | Action={Action} | Endpoint={Endpoint} | StatusCode={StatusCode}", 
+                    action.ActionType, endpoint, response.StatusCode);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending action to actor MCP");
+            _logger.LogError(ex, "[Actor] Error sending action to actor MCP | ResponseLength={ResponseLength}c", llmResponse.Length);
         }
     }
 
@@ -399,18 +469,20 @@ public class McpClientService : BackgroundService
             {
                 if (Regex.IsMatch(llmResponse, mapping.Pattern, RegexOptions.IgnoreCase))
                 {
-                    _logger.LogDebug("Action mapping matched: Pattern={Pattern}, Action={Action}", 
-                        mapping.Pattern, mapping.ActorAction);
+                    _logger.LogDebug("[Action] Pattern matched | Pattern={Pattern} | MappedAction={Action} | Response={ResponsePreview}...", 
+                        mapping.Pattern, mapping.ActorAction, llmResponse.Substring(0, Math.Min(60, llmResponse.Length)));
                     return (mapping.ActorAction, mapping.DefaultParameters);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error matching action pattern: {Pattern}", mapping.Pattern);
+                _logger.LogWarning(ex, "[Action] Error matching pattern | Pattern={Pattern} | Exception={ExceptionType}", 
+                    mapping.Pattern, ex.GetType().Name);
             }
         }
 
         // Default action
+        _logger.LogDebug("[Action] No pattern matches found, using default action | Default=say");
         return ("say", new Dictionary<string, object>());
     }
 
