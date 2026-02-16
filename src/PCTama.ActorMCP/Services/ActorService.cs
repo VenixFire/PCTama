@@ -79,7 +79,7 @@ public class ActorService
         switch (action.Action.ToLower())
         {
             case "say":
-                await SayAsync(action.Text ?? string.Empty, action.Timestamp);
+                await SayAsync(action.Text ?? string.Empty, action.InputText, action.Timestamp);
                 break;
             case "display":
                 await DisplayAsync(action.Text ?? string.Empty, action.Timestamp);
@@ -94,10 +94,19 @@ public class ActorService
         }
     }
 
-    private async Task SayAsync(string text, DateTime? timestamp)
+    private async Task SayAsync(string text, string? inputText, DateTime? timestamp)
     {
-        _logger.LogInformation("Say action: {Text} Timestamp={Timestamp}", text, DateTime.UtcNow);
-        UpdateWindowDisplay("Say", text, timestamp);
+        if (string.IsNullOrWhiteSpace(inputText))
+        {
+            _logger.LogInformation("Say action: {Text} Timestamp={Timestamp}", text, DateTime.UtcNow);
+            UpdateWindowDisplay("Say", text, timestamp);
+        }
+        else
+        {
+            _logger.LogInformation("Say action: {Text} (replying to: {InputText}) Timestamp={Timestamp}", text, inputText, DateTime.UtcNow);
+            var displayText = $"{text}\n[Replying to: {inputText}]";
+            UpdateWindowDisplay("Say", displayText, timestamp);
+        }
         await Task.CompletedTask;
     }
 

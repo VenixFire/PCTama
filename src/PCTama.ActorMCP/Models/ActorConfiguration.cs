@@ -15,6 +15,7 @@ public class ActionRequest
 {
     public string Action { get; set; } = string.Empty;
     public string? Text { get; set; }
+    public string? InputText { get; set; }
     public Dictionary<string, object> Parameters { get; set; } = new();
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }

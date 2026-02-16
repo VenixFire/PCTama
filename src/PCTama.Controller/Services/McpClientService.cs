@@ -145,7 +145,7 @@ public class McpClientService : BackgroundService
         var llmResponse = await ProcessWithLlmAsync(textInput, cancellationToken);
 
         // Send action to actor MCP
-        await SendToActorAsync(llmResponse, cancellationToken);
+        await SendToActorAsync(llmResponse, textInput, cancellationToken);
     }
 
     private async Task<string> GetTextInputAsync(CancellationToken cancellationToken)
@@ -389,7 +389,7 @@ public class McpClientService : BackgroundService
         return llmResponse;
     }
 
-    private async Task SendToActorAsync(string llmResponse, CancellationToken cancellationToken)
+    private async Task SendToActorAsync(string llmResponse, string textInput, CancellationToken cancellationToken)
     {
         if (!_mcpClients.TryGetValue("actor", out var client))
         {
@@ -416,6 +416,7 @@ public class McpClientService : BackgroundService
             {
                 action = action.ActionType,
                 text = llmResponse,
+                inputText = textInput,
                 parameters = action.Parameters
             };
 
