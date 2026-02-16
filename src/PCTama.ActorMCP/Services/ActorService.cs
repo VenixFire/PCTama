@@ -1,16 +1,20 @@
 using PCTama.ActorMCP.Models;
+using PCTama.ActorMCP.Views;
 using System.Collections.Concurrent;
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 
 namespace PCTama.ActorMCP.Services;
 
-public class ActorService : BackgroundService
+public class ActorService
 {
     private readonly ILogger<ActorService> _logger;
     private readonly IConfiguration _configuration;
     private readonly ActorConfiguration _config;
     private readonly ConcurrentQueue<ActionRequest> _actionQueue = new();
     private readonly SemaphoreSlim _queueSemaphore = new(1, 1);
-    private Thread? _uiThread;
+    private ActorWindow? _window;
+    private CancellationTokenSource? _processingCts;
 
     public ActorService(
         ILogger<ActorService> logger,
@@ -22,16 +26,19 @@ public class ActorService : BackgroundService
             ?? new ActorConfiguration();
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public void SetWindow(ActorWindow window)
+    {
+        _window = window;
+        _logger.LogInformation("Actor window set successfully");
+    }
+
+    public async Task StartProcessingAsync()
     {
         _logger.LogInformation("Actor MCP Service starting...");
         _logger.LogInformation("Display type: {DisplayType}", _config.DisplayType);
 
-        // Initialize WinUI3 on a separate thread (required for WinUI)
-        if (OperatingSystem.IsWindows() && _config.DisplayType == "WinUI3")
-        {
-            InitializeWinUI3();
-        }
+        _processingCts = new CancellationTokenSource();
+        var stoppingToken = _processingCts.Token;
 
         // Process action queue
         while (!stoppingToken.IsCancellationRequested)
@@ -52,36 +59,6 @@ public class ActorService : BackgroundService
                 _logger.LogError(ex, "Error processing action");
             }
         }
-    }
-
-    private void InitializeWinUI3()
-    {
-        _logger.LogInformation("Initializing WinUI3 display...");
-
-        // WinUI3 must run on its own thread with a message pump
-        _uiThread = new Thread(() =>
-        {
-            try
-            {
-                // TODO: Initialize actual WinUI3 window
-                // This is a placeholder - actual implementation would use Microsoft.UI.Xaml
-                _logger.LogInformation("WinUI3 window initialized");
-                
-                // Keep the UI thread alive
-                while (true)
-                {
-                    Thread.Sleep(100);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in WinUI3 thread");
-            }
-        });
-
-        _uiThread.SetApartmentState(ApartmentState.STA);
-        _uiThread.IsBackground = true;
-        _uiThread.Start();
     }
 
     private async Task ProcessActionAsync(ActionRequest action, CancellationToken cancellationToken)
@@ -108,16 +85,14 @@ public class ActorService : BackgroundService
     private async Task SayAsync(string text)
     {
         _logger.LogInformation("Say action: {Text}", text);
-        
-        // TODO: Integrate with speech synthesis or display in WinUI3 window
+        UpdateWindowDisplay("Say", text);
         await Task.CompletedTask;
     }
 
     private async Task DisplayAsync(string text)
     {
         _logger.LogInformation("Display action: {Text}", text);
-        
-        // TODO: Update WinUI3 window with text
+        UpdateWindowDisplay("Display", text);
         await Task.CompletedTask;
     }
 
@@ -126,8 +101,28 @@ public class ActorService : BackgroundService
         _logger.LogInformation("Animate action with parameters: {Parameters}", 
             string.Join(", ", parameters.Select(p => $"{p.Key}={p.Value}")));
         
-        // TODO: Perform animation in WinUI3 window
+        var parameterString = string.Join(", ", parameters.Select(p => $"{p.Key}={p.Value}"));
+        UpdateWindowDisplay("Animate", parameterString);
         await Task.CompletedTask;
+    }
+
+    private void UpdateWindowDisplay(string action, string details)
+    {
+        if (_window?.ViewModel != null)
+        {
+            try
+            {
+                // Dispatcher.UIThread is the Avalonia thread dispatcher
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    _window.ViewModel.AddAction(action, details);
+                }, Avalonia.Threading.DispatcherPriority.Normal);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating window display");
+            }
+        }
     }
 
     public async Task<ActionResult> EnqueueActionAsync(ActionRequest action)

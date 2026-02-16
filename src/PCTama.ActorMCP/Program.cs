@@ -1,30 +1,49 @@
 using PCTama.ActorMCP.Services;
+using PCTama.ActorMCP;
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 
-var builder = WebApplication.CreateBuilder(args);
-
-builder.AddServiceDefaults();
-
-// Add services to the container
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
-// Add Actor service with WinUI3
-builder.Services.AddSingleton<ActorService>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<ActorService>());
-
-var app = builder.Build();
-
-app.MapDefaultEndpoints();
-
-// Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
+// Start web server on background thread
+var webServerThread = new Thread(() =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    var builder = WebApplication.CreateBuilder(args);
 
-app.UseAuthorization();
-app.MapControllers();
+    builder.AddServiceDefaults();
 
-app.Run();
+    // Add services to the container
+    builder.Services.AddControllers();
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen();
+
+    var app = builder.Build();
+
+    app.MapDefaultEndpoints();
+
+    // Configure the HTTP request pipeline
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI();
+    }
+
+    app.UseAuthorization();
+    app.MapControllers();
+
+    // Run the web app
+    app.Run();
+});
+
+webServerThread.IsBackground = true;
+webServerThread.Start();
+
+// Give web server time to start
+Thread.Sleep(1000);
+
+// Run Avalonia on main thread
+BuildAvaloniaApp()
+    .StartWithClassicDesktopLifetime(args);
+
+static AppBuilder BuildAvaloniaApp()
+    => AppBuilder.Configure<App>()
+        .UsePlatformDetect()
+        .LogToTrace();
