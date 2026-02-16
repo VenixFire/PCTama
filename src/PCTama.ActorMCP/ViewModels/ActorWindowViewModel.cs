@@ -44,17 +44,32 @@ public class ActorWindowViewModel : ReactiveObject
     public ActorWindowViewModel()
     {
         _actionHistory = new ObservableCollection<ActionHistoryItem>();
+        
+        // Add initial test item to verify binding works
+        _actionHistory.Add(new ActionHistoryItem
+        {
+            Timestamp = DateTime.Now,
+            Action = "Test",
+            Details = "Binding test - should disappear when first action arrives"
+        });
     }
 
-    public void AddAction(string action, string details = "")
+    public void AddAction(string action, string details = "", DateTime? timestamp = null)
     {
+        // Convert UTC to local time if provided, otherwise use current local time
+        var effectiveTimestamp = timestamp.HasValue 
+            ? timestamp.Value.Kind == DateTimeKind.Utc 
+                ? timestamp.Value.ToLocalTime() 
+                : timestamp.Value
+            : DateTime.Now;
+        
         CurrentAction = action;
         ActionDetails = details;
-        LastUpdated = DateTime.Now.ToString("HH:mm:ss");
+        LastUpdated = effectiveTimestamp.ToString("HH:mm:ss");
 
         var historyItem = new ActionHistoryItem
         {
-            Timestamp = DateTime.Now,
+            Timestamp = effectiveTimestamp,
             Action = action,
             Details = details
         };

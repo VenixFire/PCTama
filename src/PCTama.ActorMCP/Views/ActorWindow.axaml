@@ -6,6 +6,7 @@
         Height="300"
         Background="#F5F5F5"
         Topmost="True"
+        CanResize="True"
         WindowStartupLocation="CenterScreen">
 
     <Grid RowDefinitions="Auto,*,Auto" Margin="20">
@@ -63,13 +64,13 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <Border Padding="10,5" Background="Transparent">
-                            <StackPanel>
-                                <Run Text="{Binding Timestamp, StringFormat='[{0:HH:mm:ss}]'}" Foreground="#999999" />
+                            <TextBlock>
+                                <Run Text="{Binding Timestamp, StringFormat='[{0:HH:mm:ss}]'}" Foreground="#CCCCCC" />
                                 <Run Text=" " />
-                                <Run Text="{Binding Action}" FontWeight="Bold" Foreground="#2E7D32" />
+                                <Run Text="{Binding Action}" FontWeight="Bold" Foreground="#66BB6A" />
                                 <Run Text=": " />
-                                <Run Text="{Binding Details}" Foreground="#333333" />
-                            </StackPanel>
+                                <Run Text="{Binding Details}" Foreground="#CCCCCC" />
+                            </TextBlock>
                         </Border>
                     </DataTemplate>
                 </ListBox.ItemTemplate>

@@ -50,26 +50,16 @@ public class ActorController : ControllerBase
     }
 
     [HttpPost("say")]
-    public async Task<IActionResult> Say([FromBody] string text)
+    public async Task<IActionResult> Say([FromBody] ActionRequest request)
     {
-        var request = new ActionRequest
-        {
-            Action = "say",
-            Text = text
-        };
-
+        request.Action = string.IsNullOrWhiteSpace(request.Action) ? "say" : request.Action;
         return await PerformAction(request);
     }
 
     [HttpPost("display")]
-    public async Task<IActionResult> Display([FromBody] string text)
+    public async Task<IActionResult> Display([FromBody] ActionRequest request)
     {
-        var request = new ActionRequest
-        {
-            Action = "display",
-            Text = text
-        };
-
+        request.Action = string.IsNullOrWhiteSpace(request.Action) ? "display" : request.Action;
         return await PerformAction(request);
     }
 
