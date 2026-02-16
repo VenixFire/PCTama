@@ -26,3 +26,39 @@ public class ActionResult
     public string Message { get; set; } = string.Empty;
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }
+// MCP Tool Models
+public class McpTool
+{
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public object InputSchema { get; set; } = new { };
+}
+
+public class McpToolsResponse
+{
+    public List<McpTool> Tools { get; set; } = new();
+}
+
+// MCP Resource Models
+public class ActorStateResource
+{
+    public string CurrentState { get; set; } = string.Empty;
+    public int QueueDepth { get; set; }
+    public string? LastAction { get; set; }
+    public DateTime? LastActionTimestamp { get; set; }
+    public int TotalActionsProcessed { get; set; }
+    public DateTime ServiceStartTime { get; set; }
+}
+
+public class McpResource
+{
+    public string Uri { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string MimeType { get; set; } = "application/json";
+}
+
+public class McpResourcesResponse
+{
+    public List<McpResource> Resources { get; set; } = new();
+}
