@@ -338,27 +338,38 @@ public class McpClientService : BackgroundService
             // Determine action based on action mappings
             var action = DetermineAction(llmResponse);
             
-            // Build action request
-            var actionRequest = new
-            {
-                action = action.ActionType,
-                text = llmResponse,
-                parameters = action.Parameters
-            };
+            StringContent content;
+            string endpoint;
 
-            var content = new StringContent(
-                JsonSerializer.Serialize(actionRequest), 
-                System.Text.Encoding.UTF8, 
-                "application/json");
-
-            // Select appropriate endpoint based on action type
-            var endpoint = action.ActionType.ToLower() switch
+            // Select appropriate endpoint and build content based on action type
+            switch (action.ActionType.ToLower())
             {
-                "say" => "/api/actor/say",
-                "display" => "/api/actor/display",
-                "animate" => "/api/actor/perform",
-                _ => "/api/actor/perform"
-            };
+                case "say":
+                case "display":
+                    // These endpoints expect just the text string
+                    endpoint = $"/api/actor/{action.ActionType.ToLower()}";
+                    content = new StringContent(
+                        JsonSerializer.Serialize(llmResponse), 
+                        System.Text.Encoding.UTF8, 
+                        "application/json");
+                    break;
+                
+                case "animate":
+                default:
+                    // Perform endpoint expects full ActionRequest object
+                    endpoint = "/api/actor/perform";
+                    var actionRequest = new
+                    {
+                        action = action.ActionType,
+                        text = llmResponse,
+                        parameters = action.Parameters
+                    };
+                    content = new StringContent(
+                        JsonSerializer.Serialize(actionRequest), 
+                        System.Text.Encoding.UTF8, 
+                        "application/json");
+                    break;
+            }
                 
             var response = await client.PostAsync(endpoint, content, cancellationToken);
             

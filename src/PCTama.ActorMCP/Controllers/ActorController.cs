@@ -9,14 +9,15 @@ namespace PCTama.ActorMCP.Controllers;
 public class ActorController : ControllerBase
 {
     private readonly ILogger<ActorController> _logger;
-    private readonly ActorService _actorService;
 
-    public ActorController(
-        ILogger<ActorController> logger,
-        ActorService actorService)
+    public ActorController(ILogger<ActorController> logger)
     {
         _logger = logger;
-        _actorService = actorService;
+    }
+
+    private ActorService? GetActorService()
+    {
+        return App.ActorServiceInstance;
     }
 
     [HttpPost("perform")]
@@ -24,7 +25,17 @@ public class ActorController : ControllerBase
     {
         try
         {
-            var result = await _actorService.EnqueueActionAsync(request);
+            var actorService = GetActorService();
+            if (actorService == null)
+            {
+                return StatusCode(503, new Models.ActionResult
+                {
+                    Success = false,
+                    Message = "Actor service not initialized"
+                });
+            }
+
+            var result = await actorService.EnqueueActionAsync(request);
             return Ok(result);
         }
         catch (Exception ex)
@@ -39,35 +50,31 @@ public class ActorController : ControllerBase
     }
 
     [HttpPost("say")]
-    public async Task<IActionResult> Say([FromBody] string text)
+    public async Task<IActionResult> Say([FromBody] ActionRequest request)
     {
-        var request = new ActionRequest
-        {
-            Action = "say",
-            Text = text
-        };
-
+        request.Action = string.IsNullOrWhiteSpace(request.Action) ? "say" : request.Action;
         return await PerformAction(request);
     }
 
     [HttpPost("display")]
-    public async Task<IActionResult> Display([FromBody] string text)
+    public async Task<IActionResult> Display([FromBody] ActionRequest request)
     {
-        var request = new ActionRequest
-        {
-            Action = "display",
-            Text = text
-        };
-
+        request.Action = string.IsNullOrWhiteSpace(request.Action) ? "display" : request.Action;
         return await PerformAction(request);
     }
 
     [HttpGet("status")]
     public IActionResult GetStatus()
     {
+        var actorService = GetActorService();
+        if (actorService == null)
+        {
+            return StatusCode(503, new { status = "not initialized" });
+        }
+
         return Ok(new 
         { 
-            queueCount = _actorService.GetQueueCount(),
+            queueCount = actorService.GetQueueCount(),
             status = "active",
             timestamp = DateTime.UtcNow
         });

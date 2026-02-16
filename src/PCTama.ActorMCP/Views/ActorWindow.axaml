@@ -1,0 +1,80 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PCTama.ActorMCP.Views.ActorWindow"
+        Title="PCTama Actor"
+        Width="400"
+        Height="300"
+        Background="#F5F5F5"
+        Topmost="True"
+        CanResize="True"
+        WindowStartupLocation="CenterScreen">
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="20">
+        
+        <!-- Header -->
+        <TextBlock Grid.Row="0"
+                   Text="Actor Actions"
+                   FontSize="20"
+                   FontWeight="Bold"
+                   Foreground="#333333"
+                   Margin="0,0,0,15" />
+
+        <!-- Main Display Area -->
+        <Border Grid.Row="1"
+                Background="White"
+                BorderBrush="#CCCCCC"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="20">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                
+                <!-- Large Action Display -->
+                <TextBlock Text="{Binding CurrentAction}"
+                           FontSize="24"
+                           FontWeight="Bold"
+                           Foreground="#2E7D32"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,15" />
+
+                <!-- Action Details -->
+                <TextBlock Text="{Binding ActionDetails}"
+                           FontSize="14"
+                           Foreground="#666666"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap" />
+
+                <!-- Timestamp -->
+                <TextBlock Text="{Binding LastUpdated}"
+                           FontSize="12"
+                           Foreground="#999999"
+                           TextAlignment="Center"
+                           Margin="0,15,0,0" />
+            </StackPanel>
+        </Border>
+
+        <!-- Action History -->
+        <StackPanel Grid.Row="2" Margin="0,15,0,0">
+            <TextBlock Text="Recent Actions:" FontSize="12" FontWeight="Bold" Foreground="#666666" Margin="0,0,0,8" />
+            <ListBox ItemsSource="{Binding ActionHistory}"
+                     Height="120"
+                     BorderBrush="#CCCCCC"
+                     BorderThickness="1"
+                     CornerRadius="4">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Border Padding="10,5" Background="Transparent">
+                            <TextBlock>
+                                <Run Text="{Binding Timestamp, StringFormat='[{0:HH:mm:ss}]'}" Foreground="#CCCCCC" />
+                                <Run Text=" " />
+                                <Run Text="{Binding Action}" FontWeight="Bold" Foreground="#66BB6A" />
+                                <Run Text=": " />
+                                <Run Text="{Binding Details}" Foreground="#CCCCCC" />
+                            </TextBlock>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </StackPanel>
+    </Grid>
+</Window>
