@@ -14,6 +14,9 @@ public class TextStreamService : BackgroundService
     private readonly SemaphoreSlim _bufferSemaphore = new(1, 1);
     private int _lastProcessedCaptionIndex = 0;
     private DateTime _lastProcessedTimestamp = DateTime.MinValue;
+    private readonly DateTime _serviceStartTime = DateTime.UtcNow;
+    private int _totalTextsProcessed = 0;
+    private DateTime? _lastTextTimestamp;
 
     public TextStreamService(
         ILogger<TextStreamService> logger,
@@ -343,6 +346,10 @@ public class TextStreamService : BackgroundService
         {
             _textBuffer.Enqueue(textData);
             
+            // Update state tracking
+            _totalTextsProcessed++;
+            _lastTextTimestamp = DateTime.UtcNow;
+            
             // Maintain buffer size limit
             while (_textBuffer.Count > _config.BufferSize)
             {
@@ -388,4 +395,101 @@ public class TextStreamService : BackgroundService
     }
 
     public int GetBufferCount() => _textBuffer.Count;
-}
+
+    // MCP Tool Discovery
+    public List<McpTool> GetAvailableTools()
+    {
+        return new List<McpTool>
+        {
+            new McpTool
+            {
+                Name = "text_get_latest",
+                Description = "Get the latest text from the stream",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new { },
+                    required = new string[] { }
+                }
+            },
+            new McpTool
+            {
+                Name = "text_get_all",
+                Description = "Get all buffered text entries",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new { },
+                    required = new string[] { }
+                }
+            },
+            new McpTool
+            {
+                Name = "text_get_buffer_count",
+                Description = "Get the number of text entries in the buffer",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new { },
+                    required = new string[] { }
+                }
+            }
+        };
+    }
+
+    // MCP State Resources
+    public TextStreamStateResource GetState()
+    {
+        var activeSources = new List<string>();
+        if (!string.IsNullOrEmpty(_config.Source))
+        {
+            activeSources.Add(_config.Source);
+        }
+        
+        activeSources.AddRange(_config.AdditionalSources
+            .Where(s => s.Enabled)
+            .Select(s => s.Name));
+
+        var currentState = _config.StreamingEnabled 
+            ? (_textBuffer.Count > 0 ? "streaming" : "waiting")
+            : "stopped";
+
+        return new TextStreamStateResource
+        {
+            CurrentState = currentState,
+            BufferCount = GetBufferCount(),
+            LastTextTimestamp = _lastTextTimestamp,
+            ActiveSource = _config.Source,
+            ActiveSources = activeSources,
+            TotalTextsProcessed = _totalTextsProcessed,
+            ServiceStartTime = _serviceStartTime
+        };
+    }
+
+    public List<McpResource> GetAvailableResources()
+    {
+        return new List<McpResource>
+        {
+            new McpResource
+            {
+                Uri = "text://state",
+                Name = "Text Stream State",
+                Description = "Current state of the text streaming service including buffer count and processing statistics",
+                MimeType = "application/json"
+            },
+            new McpResource
+            {
+                Uri = "text://buffer",
+                Name = "Text Buffer",
+                Description = "All buffered text data entries",
+                MimeType = "application/json"
+            },
+            new McpResource
+            {
+                Uri = "text://latest",
+                Name = "Latest Text",
+                Description = "The most recent text entry from the stream",
+                MimeType = "application/json"
+            }
+        };
+    }}

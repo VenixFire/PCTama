@@ -15,6 +15,10 @@ public class ActorService
     private readonly SemaphoreSlim _queueSemaphore = new(1, 1);
     private ActorWindow? _window;
     private CancellationTokenSource? _processingCts;
+    private string? _lastAction;
+    private DateTime? _lastActionTimestamp;
+    private int _totalActionsProcessed;
+    private readonly DateTime _serviceStartTime = DateTime.UtcNow;
 
     public ActorService(
         ILogger<ActorService> logger,
@@ -75,6 +79,11 @@ public class ActorService
         }
 
         _logger.LogInformation("Processing action: {Action} Timestamp={Timestamp}", action.Action, DateTime.UtcNow);
+
+        // Update state tracking
+        _lastAction = action.Action;
+        _lastActionTimestamp = DateTime.UtcNow;
+        _totalActionsProcessed++;
 
         switch (action.Action.ToLower())
         {
@@ -201,4 +210,95 @@ public class ActorService
     }
 
     public int GetQueueCount() => _actionQueue.Count;
+
+    // MCP Tool Discovery
+    public List<McpTool> GetAvailableTools()
+    {
+        return new List<McpTool>
+        {
+            new McpTool
+            {
+                Name = "actor_say",
+                Description = "Make the desktop pet say text with optional reply context",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        text = new { type = "string", description = "The text to say" },
+                        inputText = new { type = "string", description = "Optional: the text being replied to" }
+                    },
+                    required = new[] { "text" }
+                }
+            },
+            new McpTool
+            {
+                Name = "actor_display",
+                Description = "Display text without speech",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        text = new { type = "string", description = "The text to display" }
+                    },
+                    required = new[] { "text" }
+                }
+            },
+            new McpTool
+            {
+                Name = "actor_animate",
+                Description = "Perform an animation with parameters",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        animationType = new { type = "string", description = "Type of animation (e.g., dance, celebrate)" },
+                        duration = new { type = "number", description = "Duration in milliseconds" }
+                    },
+                    required = new[] { "animationType" }
+                }
+            }
+        };
+    }
+
+    // MCP State Resources
+    public ActorStateResource GetState()
+    {
+        var currentState = _processingCts != null && !_processingCts.IsCancellationRequested
+            ? (_actionQueue.Count > 0 ? "busy" : "idle")
+            : "stopped";
+
+        return new ActorStateResource
+        {
+            CurrentState = currentState,
+            QueueDepth = _actionQueue.Count,
+            LastAction = _lastAction,
+            LastActionTimestamp = _lastActionTimestamp,
+            TotalActionsProcessed = _totalActionsProcessed,
+            ServiceStartTime = _serviceStartTime
+        };
+    }
+
+    public List<McpResource> GetAvailableResources()
+    {
+        return new List<McpResource>
+        {
+            new McpResource
+            {
+                Uri = "actor://state",
+                Name = "Actor State",
+                Description = "Current state of the actor service including queue depth and last action",
+                MimeType = "application/json"
+            },
+            new McpResource
+            {
+                Uri = "actor://queue",
+                Name = "Action Queue",
+                Description = "Information about the action queue",
+                MimeType = "application/json"
+            }
+        };
+    }
 }

@@ -37,6 +37,12 @@ public class McpClientService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("[MCP] Client Service starting... | Timestamp={Timestamp}", DateTime.UtcNow);
+        
+        // Log active personality
+        var activePersonality = GetActivePersonality();
+        _logger.LogInformation("[Personality] Active personality: {PersonalityName} | Description={Description}", 
+            activePersonality?.DisplayName ?? "Default (from PromptConfig)", 
+            activePersonality?.Description ?? "Using PromptConfig.SystemPrompt");
 
         // Initialize MCP clients
         await InitializeMcpClientsAsync(stoppingToken);
@@ -148,6 +154,28 @@ public class McpClientService : BackgroundService
         await SendToActorAsync(llmResponse, textInput, cancellationToken);
     }
 
+    private PersonalityProfile? GetActivePersonality()
+    {
+        if (string.IsNullOrEmpty(_mcpConfig.ActivePersonality) || !_mcpConfig.Personalities.Any())
+        {
+            return null;
+        }
+
+        return _mcpConfig.Personalities.FirstOrDefault(p => 
+            p.Name.Equals(_mcpConfig.ActivePersonality, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string GetSystemPrompt()
+    {
+        var personality = GetActivePersonality();
+        if (personality != null && !string.IsNullOrEmpty(personality.SystemPrompt))
+        {
+            return personality.SystemPrompt;
+        }
+
+        return _mcpConfig.PromptConfig.SystemPrompt;
+    }
+
     private async Task<string> GetTextInputAsync(CancellationToken cancellationToken)
     {
         if (!_mcpClients.TryGetValue("text", out var client))
@@ -243,14 +271,15 @@ public class McpClientService : BackgroundService
 
                 // Build messages with system prompt
                 var messages = new List<ChatMessage>();
-                if (!string.IsNullOrEmpty(_mcpConfig.PromptConfig.SystemPrompt))
+                var systemPrompt = GetSystemPrompt();
+                if (!string.IsNullOrEmpty(systemPrompt))
                 {
-                    messages.Add(ChatMessage.System(_mcpConfig.PromptConfig.SystemPrompt));
+                    messages.Add(ChatMessage.System(systemPrompt));
                 }
                 messages.AddRange(_chatHistory);
 
                 _logger.LogTrace("[LLM] Chat mode | SystemPrompt={HasSystemPrompt} | HistorySize={HistorySize} | TotalMessages={MessageCount}", 
-                    !string.IsNullOrEmpty(_mcpConfig.PromptConfig.SystemPrompt), _chatHistory.Count, messages.Count);
+                    !string.IsNullOrEmpty(systemPrompt), _chatHistory.Count, messages.Count);
 
                 response = await _mcpSdkClient.ChatAsync(messages, cancellationToken);
 
@@ -272,7 +301,7 @@ public class McpClientService : BackgroundService
 
                 response = await _mcpSdkClient.GenerateAsync(
                     prompt,
-                    _mcpConfig.PromptConfig.SystemPrompt,
+                    GetSystemPrompt(),
                     cancellationToken);
             }
 

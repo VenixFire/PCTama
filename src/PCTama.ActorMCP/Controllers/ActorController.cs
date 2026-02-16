@@ -85,4 +85,60 @@ public class ActorController : ControllerBase
     {
         return Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
     }
+
+    // MCP Tool Discovery
+    [HttpGet("mcp/tools")]
+    public IActionResult GetMcpTools()
+    {
+        var actorService = GetActorService();
+        if (actorService == null)
+        {
+            return StatusCode(503, new { error = "Actor service not initialized" });
+        }
+
+        var tools = actorService.GetAvailableTools();
+        return Ok(new McpToolsResponse { Tools = tools });
+    }
+
+    // MCP Resource Discovery
+    [HttpGet("mcp/resources")]
+    public IActionResult GetMcpResources()
+    {
+        var actorService = GetActorService();
+        if (actorService == null)
+        {
+            return StatusCode(503, new { error = "Actor service not initialized" });
+        }
+
+        var resources = actorService.GetAvailableResources();
+        return Ok(new McpResourcesResponse { Resources = resources });
+    }
+
+    // MCP Resource Access
+    [HttpGet("mcp/resources/{resourceId}")]
+    public IActionResult GetMcpResource(string resourceId)
+    {
+        var actorService = GetActorService();
+        if (actorService == null)
+        {
+            return StatusCode(503, new { error = "Actor service not initialized" });
+        }
+
+        switch (resourceId.ToLower())
+        {
+            case "state":
+                var state = actorService.GetState();
+                return Ok(state);
+
+            case "queue":
+                return Ok(new
+                {
+                    queueDepth = actorService.GetQueueCount(),
+                    timestamp = DateTime.UtcNow
+                });
+
+            default:
+                return NotFound(new { error = $"Resource '{resourceId}' not found" });
+        }
+    }
 }

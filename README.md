@@ -3,14 +3,14 @@
 [![Build and Test](https://github.com/yourusername/PCTama/workflows/PCTama%20Build%20and%20Test/badge.svg)](https://github.com/yourusername/PCTama/actions)
 [![CMake Build](https://github.com/yourusername/PCTama/workflows/CMake%20Build/badge.svg)](https://github.com/yourusername/PCTama/actions)
 
-A sophisticated microservices-based desktop pet application that integrates AI to enable intelligent interactions. Built with ASP.NET Core, .NET Aspire framework, and Model Context Protocol (MCP) integration, PCTama uses local LLMs to process streaming text input and provides interactive visual output via WinUI3.
+A sophisticated microservices-based desktop pet application that integrates AI to enable intelligent interactions. Built with ASP.NET Core, .NET Aspire framework, and Model Context Protocol (MCP) integration, PCTama uses local LLMs to process streaming text input and provides interactive visual output via Avalonia UI.
 
 ## 🎯 Project Goals
 
 - ✅ **Aspire-based microservices** - Cloud-native architecture with service discovery
 - ✅ **MCP integration ready** - Framework for Model Context Protocol implementation
 - ✅ **Streaming text input** - Real-time text processing from multiple sources
-- ✅ **Desktop pet display** - WinUI3-based output with actions and animations
+- ✅ **Desktop pet display** - Avalonia UI-based output with actions and animations
 - ✅ **Extensible design** - Easy to add new input/output MCPs
 - ✅ **Cross-platform builds** - CMake support for Windows, macOS, and Linux
 
@@ -44,9 +44,9 @@ PCTama is built as a collection of ASP.NET microservices orchestrated through .N
          ▼                    ▼                   ▼
 ┌────────────────┐   ┌────────────────┐   ┌────────────────┐
 │   Text MCP     │   │   Controller   │   │   Actor MCP    │
-│   (Port 5001)  │──>│   (Port 5000)  │──>│   (Port 5002)  │
+│   (Port 5001)  │──>│   (Port 5003)  │──>│   (Port 5000)  │
 │                │   │                │   │                │
-│ • OBS LocalVoice   │ • MCP SDK      │   │ • WinUI3       │
+│ • OBS LocalVoice   │ • MCP SDK      │   │ • Avalonia UI  │
 │ • Text Stream      │ • Local LLM    │   │ • Actions      │
 │ • Buffering        │ • Orchestration│   │ • Display      │
 └────────────────┘   └────────────────┘   └────────────────┘
@@ -65,7 +65,7 @@ PCTama is built as a collection of ASP.NET microservices orchestrated through .N
   - Multiple input source support
   
 - **PCTama.ActorMCP** (port 5002) - Desktop pet display
-  - WinUI3-based window management
+  - Avalonia UI-based window management
   - Action queue processing
   - Animation support
   
@@ -84,7 +84,7 @@ PCTama is built as a collection of ASP.NET microservices orchestrated through .N
 - **OpenTelemetry** - Built-in observability dashboard
 - **Health Checks** - Service monitoring and status endpoints
 - **Extensible Config** - Add new MCPs and input sources easily
-- **WinUI3 Display** - Modern Windows UI framework
+- **Avalonia UI Display** - Cross-platform UI framework
 - **REST APIs** - Comprehensive endpoints for all services
 - **Full Testing** - xUnit suite with unit & integration tests
 - **CI/CD** - GitHub Actions multi-platform builds
@@ -95,7 +95,7 @@ PCTama is built as a collection of ASP.NET microservices orchestrated through .N
 - **.NET 8.0 SDK** or later ([download](https://dotnet.microsoft.com/download))
 - **CMake** 3.20 or later
 - **Git** for version control
-- **Windows 10 Build 19041+** (for ActorMCP/WinUI3 only)
+- **Windows 10 Build 19041+** (for ActorMCP/Avalonia UI only)
 
 ### Optional
 - **Ollama** or local LLM for AI responses
@@ -265,7 +265,7 @@ Edit `src/PCTama.ActorMCP/appsettings.json`:
 ```json
 {
   "ActorMcpConfiguration": {
-    "DisplayType": "WinUI3",
+    "DisplayType": "Avalonia UI",
     "WindowWidth": 400,
     "WindowHeight": 300,
     "WindowTitle": "PCTama Actor",
@@ -288,7 +288,7 @@ brew install ollama              # macOS
 ollama serve
 
 # In another terminal, pull a model
-ollama pull llama2
+ollama pull qwen2.5:3b
 
 # Verify it's running
 curl http://localhost:11434/api/tags
@@ -395,7 +395,7 @@ PCTama/
 │   ├── PCTama.ServiceDefaults/ # Shared configuration
 │   ├── PCTama.Controller/      # Main controller service
 │   ├── PCTama.TextMCP/         # Text input service
-│   └── PCTama.ActorMCP/        # WinUI3 output service
+│   └── PCTama.ActorMCP/        # Avalonia UI output service
 ├── tests/
 │   └── PCTama.Tests/           # Unit & integration tests
 ├── build.sh                    # macOS/Linux build script

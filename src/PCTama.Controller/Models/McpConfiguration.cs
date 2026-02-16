@@ -27,6 +27,15 @@ public class PromptConfiguration
     public Dictionary<string, string> ResponsePatterns { get; set; } = new();
 }
 
+public class PersonalityProfile
+{
+    public string Name { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string SystemPrompt { get; set; } = string.Empty;
+    public List<string> Examples { get; set; } = new();
+}
+
 public class ActionMapping
 {
     public string Pattern { get; set; } = string.Empty;
@@ -43,6 +52,8 @@ public class McpConfiguration
     public PromptConfiguration PromptConfig { get; set; } = new();
     public List<BehaviorRule> BehaviorRules { get; set; } = new();
     public List<ActionMapping> ActionMappings { get; set; } = new();
+    public List<PersonalityProfile> Personalities { get; set; } = new();
+    public string ActivePersonality { get; set; } = "default";
     public int ProcessingIntervalMs { get; set; } = 1000;
     public bool UseChatMode { get; set; } = true;
     public int MaxChatHistory { get; set; } = 10;

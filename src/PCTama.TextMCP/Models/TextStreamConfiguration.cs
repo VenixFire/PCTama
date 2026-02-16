@@ -36,3 +36,40 @@ public class SrtCaption
     public string Text { get; set; } = string.Empty;
     public DateTime ParsedAt { get; set; } = DateTime.UtcNow;
 }
+// MCP Tool Models
+public class McpTool
+{
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public object InputSchema { get; set; } = new { };
+}
+
+public class McpToolsResponse
+{
+    public List<McpTool> Tools { get; set; } = new();
+}
+
+// MCP Resource Models
+public class TextStreamStateResource
+{
+    public string CurrentState { get; set; } = string.Empty;
+    public int BufferCount { get; set; }
+    public DateTime? LastTextTimestamp { get; set; }
+    public string ActiveSource { get; set; } = string.Empty;
+    public List<string> ActiveSources { get; set; } = new();
+    public int TotalTextsProcessed { get; set; }
+    public DateTime ServiceStartTime { get; set; }
+}
+
+public class McpResource
+{
+    public string Uri { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string MimeType { get; set; } = "application/json";
+}
+
+public class McpResourcesResponse
+{
+    public List<McpResource> Resources { get; set; } = new();
+}
