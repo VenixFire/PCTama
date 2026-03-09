@@ -39,17 +39,17 @@ PCTama is built as a collection of ASP.NET microservices orchestrated through .N
 │                    PCTama.AppHost                           │
 │                  (Aspire Orchestrator)                      │
 │           Dashboard: http://localhost:15000                 │
-└────────┬────────────────────┬───────────────────┬──────────┘
+└────────┬────────────────────┬───────────────────┬───────────┘
          │                    │                   │
          ▼                    ▼                   ▼
-┌────────────────┐   ┌────────────────┐   ┌────────────────┐
-│   Text MCP     │   │   Controller   │   │   Actor MCP    │
-│   (Port 5001)  │──>│   (Port 5003)  │──>│   (Port 5000)  │
-│                │   │                │   │                │
-│ • OBS LocalVoice   │ • MCP SDK      │   │ • Avalonia UI  │
-│ • Text Stream      │ • Local LLM    │   │ • Actions      │
-│ • Buffering        │ • Orchestration│   │ • Display      │
-└────────────────┘   └────────────────┘   └────────────────┘
+┌──────────────────┐   ┌────────────────┐   ┌────────────────┐
+│   Text MCP       │   │   Controller   │   │   Actor MCP    │
+│   (Port 5001)    │──>│   (Port 5003)  │──>│   (Port 5000)  │
+│                  │   │                │   │                │
+│ • OBS LocalVoice |   │ • MCP SDK      │   │ • Avalonia UI  │
+│ • Text Stream    |   │ • Local LLM    │   │ • Actions      │
+│ • Buffering      |   │ • Orchestration│   │ • Display      │
+└──────────────────┘   └────────────────┘   └────────────────┘
 ```
 
 **Microservices**:
@@ -439,7 +439,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## 🎉 Status
 
-PCTama is **complete** and ready for development and deployment!
+PCTama is **in progress** and ready for development and deployment!
 
 All core features are implemented:
 - ✅ Aspire microservices framework

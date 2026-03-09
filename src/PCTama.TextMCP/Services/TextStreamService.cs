@@ -17,6 +17,7 @@ public class TextStreamService : BackgroundService
     private readonly DateTime _serviceStartTime = DateTime.UtcNow;
     private int _totalTextsProcessed = 0;
     private DateTime? _lastTextTimestamp;
+    private int _totalCaptionsProcessed = 0;
 
     public TextStreamService(
         ILogger<TextStreamService> logger,
@@ -103,6 +104,8 @@ public class TextStreamService : BackgroundService
                     // File was truncated or reset
                     _logger.LogDebug("🔄 File was reset, starting from beginning");
                     lastPosition = 0;
+                    _lastProcessedCaptionIndex = 0;
+                    _lastProcessedTimestamp = DateTime.MinValue;
                 }
                 
                 lastFileSize = fileInfo.Length;
@@ -243,6 +246,7 @@ public class TextStreamService : BackgroundService
                 
                 await AddTextToBufferAsync(textData);
                 _logger.LogInformation("📝 Received caption #{Index}: {Text}", caption.Index, caption.Text);
+                _totalCaptionsProcessed++;
                 
                 // Update last processed index
                 if (caption.Index > _lastProcessedCaptionIndex)
@@ -250,6 +254,9 @@ public class TextStreamService : BackgroundService
                     _lastProcessedCaptionIndex = caption.Index;
                 }
             }
+
+            _logger.LogDebug("📊 SRT tracking | TotalProcessed={Total} | LastIndex={LastIndex}",
+                _totalCaptionsProcessed, _lastProcessedCaptionIndex);
         }
         catch (Exception ex)
         {
